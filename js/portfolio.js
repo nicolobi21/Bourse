@@ -13,15 +13,20 @@ const Portfolio = (() => {
   let listeners = [];
   let valueHistory = []; // Historique de la valeur totale du portefeuille
 
+  let initialized = false;
+
   function init(budget) {
-    if (budget && budget > 0) INITIAL_CAPITAL = budget;
+    if (budget && !isNaN(budget) && budget > 0) INITIAL_CAPITAL = budget;
     cash = INITIAL_CAPITAL;
     positions = {};
     history = [];
     realizedPnL = 0;
     valueHistory = [{ time: Date.now(), value: INITIAL_CAPITAL }];
+    initialized = true;
     restore(); // Tente de restaurer depuis localStorage
   }
+
+  function isInitialized() { return initialized; }
 
   function save() {
     const roomCode = localStorage.getItem('bourse_room') || 'solo';
@@ -170,6 +175,6 @@ const Portfolio = (() => {
     getValueHistory,
     recordValue,
     onUpdate,
-    INITIAL_CAPITAL,
+    isInitialized,
   };
 })();

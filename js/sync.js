@@ -10,7 +10,12 @@
  */
 
 const Sync = (() => {
-  // === REMPLACER AVEC VOTRE CONFIGURATION FIREBASE ===
+  // === CONFIGURATION FIREBASE ===
+  // Note: sur un site statique (GitHub Pages), la clé API est visible côté client.
+  // Sécurisez votre base via les Firebase Security Rules dans la console Firebase :
+  //   { "rules": { "rooms": { ".read": true, ".write": true },
+  //                ".read": false, ".write": false } }
+  // Cela limite l'accès à /rooms/ uniquement.
   const FIREBASE_CONFIG = {
     apiKey: "AIzaSyCfX5QAr1-YluCcpKw1Ja0i9XluRHiVzJ4",
     authDomain: "bourse-2ba52.firebaseapp.com",
@@ -79,7 +84,9 @@ const Sync = (() => {
         marketOpen: true,
         players: {},
       });
-      joinRoom(roomCode, name);
+      // Ne pas appeler updateScore() ici : le budget n'est pas encore défini.
+      // Le score sera envoyé au premier cycle UI dans game.html.
+      listenToLeaderboard();
     }
 
     // Stocker en local aussi
@@ -115,7 +122,7 @@ const Sync = (() => {
     }
   }
 
-  function joinRoom(code, name) {
+  function joinRoom(code, name, callback) {
     roomCode = code;
     playerName = name;
     if (!playerId) playerId = generatePlayerId(name);
@@ -126,20 +133,21 @@ const Sync = (() => {
 
     if (firebaseAvailable) {
       roomRef = db.ref('rooms/' + code);
-      // Vérifier que la salle existe
+      // Vérifier que la salle existe avant de rejoindre
       roomRef.once('value', snap => {
         if (!snap.exists()) {
-          // Créer la salle si elle n'existe pas (mode tolérant)
-          roomRef.set({
-            host: name,
-            createdAt: Date.now(),
-            marketOpen: true,
-            players: {},
-          });
+          // Salle introuvable
+          roomRef = null;
+          if (callback) callback(false);
+          return;
         }
+        updateScore();
+        listenToLeaderboard();
+        if (callback) callback(true);
       });
-      updateScore();
-      listenToLeaderboard();
+    } else {
+      // Mode hors-ligne : toujours OK
+      if (callback) callback(true);
     }
   }
 
@@ -161,8 +169,8 @@ const Sync = (() => {
       roomRef.child('players/' + playerId).set(data);
     }
 
-    // Local storage backup
-    localStorage.setItem('bourse_score_' + roomCode + '_' + playerName, JSON.stringify(data));
+    // Local storage backup (utilise playerId pour éviter les collisions de prénoms)
+    localStorage.setItem('bourse_score_' + roomCode + '_' + playerId, JSON.stringify(data));
   }
 
   function listenOnly(code) {

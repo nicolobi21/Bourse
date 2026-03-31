@@ -147,6 +147,7 @@
     function joinGame() {
       const name = document.getElementById('join-name').value.trim();
       const code = document.getElementById('join-code').value.trim().toUpperCase();
+      const joinBtn = document.querySelector('#tab-join .btn-primary');
 
       if (!name) { document.getElementById('join-name').focus(); return; }
       if (!code || code.length !== 5) { document.getElementById('join-code').focus(); return; }
@@ -154,9 +155,29 @@
       Market.init();
       Portfolio.init();
       Sync.init();
-      Sync.joinRoom(code, name);
 
-      window.location.href = 'game.html';
+      // Désactiver le bouton pendant la vérification
+      if (joinBtn) { joinBtn.disabled = true; joinBtn.textContent = 'Connexion...'; }
+
+      Sync.joinRoom(code, name, (success) => {
+        if (success) {
+          window.location.href = 'game.html';
+        } else {
+          if (joinBtn) { joinBtn.disabled = false; joinBtn.textContent = 'Rejoindre'; }
+          const codeInput = document.getElementById('join-code');
+          codeInput.style.borderColor = 'var(--red)';
+          codeInput.focus();
+          // Afficher erreur
+          let err = document.getElementById('join-error');
+          if (!err) {
+            err = document.createElement('p');
+            err.id = 'join-error';
+            err.style.cssText = 'color:var(--red); font-size:0.8rem; margin-top:0.5rem;';
+            codeInput.parentNode.appendChild(err);
+          }
+          err.textContent = 'Salle introuvable. Vérifie le code.';
+        }
+      });
     }
 
     function startGame() {
@@ -176,8 +197,10 @@
       Portfolio.init();
       Sync.init();
       const code = Sync.createRoom(name);
-      localStorage.setItem('bourse_duration_' + code, (selectedDuration * 60 * 1000).toString());
+      const durationMs = selectedDuration * 60 * 1000;
+      localStorage.setItem('bourse_duration_' + code, durationMs.toString());
       localStorage.setItem('bourse_budget_' + code, selectedBudget.toString());
+      Sync.saveRoomSettings(durationMs, selectedBudget);
 
       window.location.href = 'game.html';
     }

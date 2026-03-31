@@ -40,14 +40,16 @@ const App = (() => {
     if (savedDuration) {
       GAME_DURATION = parseInt(savedDuration);
     }
-    const savedBudget = parseInt(localStorage.getItem('bourse_budget_' + Sync.getRoomCode()));
-    Portfolio.init(savedBudget || 10000);
+    const rawBudget = parseInt(localStorage.getItem('bourse_budget_' + Sync.getRoomCode()));
+    const savedBudget = (!isNaN(rawBudget) && rawBudget > 0) ? rawBudget : 10000;
+    Portfolio.init(savedBudget);
 
     // Synchroniser les settings depuis Firebase (au cas où on rejoint une salle)
     Sync.loadRoomSettings((settings) => {
-      if (settings.budget && settings.budget !== (savedBudget || 10000)) {
+      if (settings.budget && settings.budget !== savedBudget) {
         // Le budget Firebase diffère du local → réinitialiser avec le bon budget
         Portfolio.init(settings.budget);
+        localStorage.setItem('bourse_budget_' + Sync.getRoomCode(), settings.budget.toString());
         updateUI();
       }
       if (settings.duration && settings.duration !== GAME_DURATION) {
@@ -133,6 +135,13 @@ const App = (() => {
     updateTimer();
     updateUI();
     updateCalendarUI();
+  }
+
+  // ==================== UTILITIES ====================
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
   }
 
   // ==================== STOCK LIST ====================
@@ -362,9 +371,11 @@ const App = (() => {
 
     // Dernières 20 transactions
     tbody.innerHTML = history.slice(-20).reverse().map(t => {
-      const time = new Date(t.time);
-      const timeStr = time.getHours().toString().padStart(2, '0') + ':' +
-                      time.getMinutes().toString().padStart(2, '0');
+      // Afficher le temps écoulé depuis le début du jeu (T+mm:ss)
+      const elapsed = Math.max(0, t.time - gameStartTime);
+      const mins = Math.floor(elapsed / 60000);
+      const secs = Math.floor((elapsed % 60000) / 1000);
+      const timeStr = 'T+' + mins.toString().padStart(2, '0') + ':' + secs.toString().padStart(2, '0');
       const sideClass = t.side === 'buy' ? 'text-green' : 'text-red';
       const sideText = t.side === 'buy' ? 'ACHAT' : 'VENTE';
 
@@ -497,7 +508,9 @@ const App = (() => {
 
   function getPendingReserved(symbol, side) {
     return OrderBook.getPendingOrders()
-      .filter(o => o.symbol === symbol && o.side === side)
+      // Pour les achats: compter TOUS les ordres buy (cross-stock) pour ne pas surengager le cash
+      // Pour les ventes: filtrer par symbole (on ne peut vendre que les actions qu'on possède)
+      .filter(o => o.side === side && (side === 'buy' || o.symbol === symbol))
       .reduce((sum, o) => sum + (side === 'sell' ? o.quantity : o.limitPrice * o.quantity), 0);
   }
 
@@ -715,15 +728,31 @@ const App = (() => {
   }
 
   // ==================== TOAST ====================
+  let activeToasts = [];
+
   function showToast(message, type = 'success') {
     const toast = document.createElement('div');
     toast.className = 'toast ' + type;
     toast.textContent = message;
     document.body.appendChild(toast);
 
+    // Décaler les toasts actifs vers le haut
+    activeToasts.push(toast);
+    repositionToasts();
+
     setTimeout(() => {
+      activeToasts = activeToasts.filter(t => t !== toast);
       toast.remove();
+      repositionToasts();
     }, 4000);
+  }
+
+  function repositionToasts() {
+    let offset = 1.5; // rem from bottom
+    for (let i = activeToasts.length - 1; i >= 0; i--) {
+      activeToasts[i].style.bottom = offset + 'rem';
+      offset += 3.5; // height approx of each toast
+    }
   }
 
   // ==================== TUTORIAL ====================
@@ -1104,7 +1133,7 @@ const App = (() => {
       const perfClass = perf >= 0 ? 'text-green' : 'text-red';
       return `<tr class="${isMe ? 'is-me' : ''}">
         <td>${i + 1}</td>
-        <td>${p.name}${isMe ? ' (moi)' : ''}</td>
+        <td>${escapeHtml(p.name)}${isMe ? ' (moi)' : ''}</td>
         <td style="text-align:right;">${p.totalValue ? p.totalValue.toLocaleString('fr-BE', { minimumFractionDigits: 2 }) + '€' : '-'}</td>
         <td style="text-align:right;" class="${perfClass}">${perf >= 0 ? '+' : ''}${perf.toFixed(2)}%</td>
       </tr>`;

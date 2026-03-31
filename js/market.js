@@ -49,6 +49,9 @@ const Market = (() => {
   let marketOpen = false;
 
   function init() {
+    // Idempotent: ne pas réinitialiser si déjà initialisé (évite reset des prix au rechargement)
+    if (Object.keys(prices).length > 0) return;
+
     STOCKS.forEach(stock => {
       prices[stock.symbol] = {
         ...stock,
