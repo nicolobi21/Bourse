@@ -114,7 +114,6 @@ const Sync = (() => {
       });
     }
   }
-  }
 
   function joinRoom(code, name) {
     roomCode = code;
