@@ -52,6 +52,12 @@ const Sync = (() => {
     if (!playerName) {
       restoreSession();
     }
+
+    // Reconnecter à Firebase si une session est restaurée
+    if (firebaseAvailable && roomCode && !roomRef) {
+      roomRef = db.ref('rooms/' + roomCode);
+      listenToLeaderboard();
+    }
   }
 
   function generatePlayerId(name) {
