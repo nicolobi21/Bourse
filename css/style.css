@@ -270,8 +270,12 @@ body {
   justify-content: space-between;
   align-items: flex-start;
   margin-bottom: 0.75rem;
-  flex-wrap: wrap;
   gap: 0.5rem;
+}
+
+.chart-header > div:first-child {
+  min-width: 0;
+  flex: 1;
 }
 
 .chart-timeframes {
