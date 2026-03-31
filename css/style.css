@@ -268,8 +268,38 @@ body {
 .chart-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   margin-bottom: 0.75rem;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.chart-timeframes {
+  display: flex;
+  gap: 3px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 3px;
+  flex-shrink: 0;
+}
+
+.tf-btn {
+  padding: 0.35rem 0.75rem;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.tf-btn:hover { color: var(--text-primary); background: var(--bg-hover); }
+.tf-btn.active {
+  background: var(--accent);
+  color: white;
 }
 
 .chart-stock-info {
@@ -559,6 +589,34 @@ body {
   flex: 1;
   overflow-y: auto;
   max-height: 200px;
+}
+
+.leaderboard-live-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.leaderboard-live-table th {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  padding: 0.35rem 0.5rem;
+  text-align: left;
+}
+
+.leaderboard-live-table td {
+  padding: 0.4rem 0.5rem;
+  border-top: 1px solid var(--border);
+}
+
+.leaderboard-live-table tr.is-me {
+  background: rgba(59, 130, 246, 0.1);
+  font-weight: 700;
+}
+
+.leaderboard-live-table .rank-medal {
+  font-size: 1rem;
 }
 
 .positions-table, .history-table {
