@@ -35,15 +35,25 @@ const App = (() => {
       return;
     }
 
-    // Charger durée personnalisée
+    // Charger durée et budget (local d'abord, puis Firebase en arrière-plan)
     const savedDuration = localStorage.getItem('bourse_duration_' + Sync.getRoomCode());
     if (savedDuration) {
       GAME_DURATION = parseInt(savedDuration);
     }
-
-    // Charger budget personnalisé
     const savedBudget = parseInt(localStorage.getItem('bourse_budget_' + Sync.getRoomCode()));
     Portfolio.init(savedBudget || 10000);
+
+    // Synchroniser les settings depuis Firebase (au cas où on rejoint une salle)
+    Sync.loadRoomSettings((settings) => {
+      if (settings.budget && settings.budget !== (savedBudget || 10000)) {
+        // Le budget Firebase diffère du local → réinitialiser avec le bon budget
+        Portfolio.init(settings.budget);
+        updateUI();
+      }
+      if (settings.duration && settings.duration !== GAME_DURATION) {
+        GAME_DURATION = settings.duration;
+      }
+    });
 
     // Restaurer les succès
     restoreAchievements();
@@ -108,7 +118,8 @@ const App = (() => {
     // Init portfolio mini-chart
     initPortfolioChart();
 
-    // Setup mobile nav
+    // Setup tabs and mobile nav
+    setupRightPanelTabs();
     setupMobileNav();
 
     // Show tutorial on first visit
@@ -692,6 +703,10 @@ const App = (() => {
         feed.removeChild(feed.lastChild);
       }
     }
+
+    // Badge notification on News tab
+    addTabBadge('news');
+    if (event.isCalendar) addTabBadge('calendar');
   }
 
   // ==================== TOAST ====================
@@ -997,6 +1012,55 @@ const App = (() => {
     const panel = document.getElementById('achievements-panel');
     if (panel) panel.classList.toggle('hidden');
     updateAchievementsBadge();
+  }
+
+  // ==================== RIGHT PANEL TABS ====================
+  let activeRightTab = 'order';
+  let newNewsCount = 0;
+  let newCalendarCount = 0;
+
+  function setupRightPanelTabs() {
+    document.querySelectorAll('.right-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        const target = tab.dataset.rtab;
+        activeRightTab = target;
+
+        // Update tab buttons
+        document.querySelectorAll('.right-tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+
+        // Update content
+        document.querySelectorAll('.right-tab-content').forEach(c => c.classList.remove('active'));
+        const content = document.getElementById('rtab-' + target);
+        if (content) content.classList.add('active');
+
+        // Clear badge on clicked tab
+        const badge = tab.querySelector('.tab-badge');
+        if (badge) badge.remove();
+        if (target === 'news') newNewsCount = 0;
+        if (target === 'calendar') newCalendarCount = 0;
+      });
+    });
+  }
+
+  function addTabBadge(tabName) {
+    if (activeRightTab === tabName) return; // Already viewing this tab
+    const tab = document.querySelector(`.right-tab[data-rtab="${tabName}"]`);
+    if (!tab) return;
+
+    if (tabName === 'news') newNewsCount++;
+    if (tabName === 'calendar') newCalendarCount++;
+    const count = tabName === 'news' ? newNewsCount : newCalendarCount;
+
+    let badge = tab.querySelector('.tab-badge');
+    if (badge) {
+      badge.textContent = count;
+    } else {
+      badge = document.createElement('span');
+      badge.className = 'tab-badge';
+      badge.textContent = count;
+      tab.appendChild(badge);
+    }
   }
 
   // ==================== MOBILE NAV ====================

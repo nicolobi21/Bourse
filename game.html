@@ -61,66 +61,82 @@
       </div>
     </div>
 
-    <!-- RIGHT: Order Panel -->
+    <!-- RIGHT: Order Panel with tabs -->
     <div class="panel order-panel" id="panel-right">
-      <div class="panel-title">Passer un ordre</div>
-
-      <!-- Buy / Sell -->
-      <div class="order-tabs">
-        <button class="order-tab active buy" data-side="buy">Acheter</button>
-        <button class="order-tab sell" data-side="sell">Vendre</button>
+      <!-- Right panel tabs -->
+      <div class="right-panel-tabs">
+        <button class="right-tab active" data-rtab="order">💱 Ordres</button>
+        <button class="right-tab" data-rtab="calendar">📅 Agenda</button>
+        <button class="right-tab" data-rtab="news">📰 Actus</button>
       </div>
 
-      <!-- Market / Limit -->
-      <div class="order-type-tabs">
-        <button class="order-type-tab active" data-type="market">Au marché</button>
-        <button class="order-type-tab" data-type="limit">Cours limité</button>
-      </div>
-
-      <div class="order-form">
-        <div class="form-group">
-          <label>Quantité</label>
-          <input type="number" id="order-quantity" min="1" step="1" placeholder="Nombre d'actions">
+      <!-- TAB: Orders -->
+      <div class="right-tab-content active" id="rtab-order">
+        <!-- Buy / Sell -->
+        <div class="order-tabs">
+          <button class="order-tab active buy" data-side="buy">Acheter</button>
+          <button class="order-tab sell" data-side="sell">Vendre</button>
         </div>
 
-        <!-- Quick qty buttons -->
-        <div style="display:flex; gap:4px;">
-          <button class="qty-btn btn-secondary" data-pct="0.25" style="padding:0.3rem; font-size:0.75rem; margin:0;">25%</button>
-          <button class="qty-btn btn-secondary" data-pct="0.5" style="padding:0.3rem; font-size:0.75rem; margin:0;">50%</button>
-          <button class="qty-btn btn-secondary" data-pct="0.75" style="padding:0.3rem; font-size:0.75rem; margin:0;">75%</button>
-          <button class="qty-btn btn-secondary" data-pct="1" style="padding:0.3rem; font-size:0.75rem; margin:0;">Max</button>
+        <!-- Market / Limit -->
+        <div class="order-type-tabs">
+          <button class="order-type-tab active" data-type="market">Au marché</button>
+          <button class="order-type-tab" data-type="limit">Cours limité</button>
         </div>
 
-        <div class="form-group" id="limit-price-group" style="display:none;">
-          <label>Prix limite (€)</label>
-          <input type="number" id="order-limit-price" min="0.01" step="0.01" placeholder="Prix souhaité">
-        </div>
-
-        <div class="order-summary">
-          <div class="row">
-            <span class="text-muted">Prix unitaire</span>
-            <span id="summary-price">—</span>
+        <div class="order-form">
+          <div class="form-group">
+            <label>Quantité</label>
+            <input type="number" id="order-quantity" min="1" step="1" placeholder="Nombre d'actions">
           </div>
-          <div class="row total">
-            <span>Total</span>
-            <span id="summary-total">—</span>
+
+          <!-- Quick qty buttons -->
+          <div style="display:flex; gap:4px;">
+            <button class="qty-btn btn-secondary" data-pct="0.25" style="padding:0.3rem; font-size:0.75rem; margin:0;">25%</button>
+            <button class="qty-btn btn-secondary" data-pct="0.5" style="padding:0.3rem; font-size:0.75rem; margin:0;">50%</button>
+            <button class="qty-btn btn-secondary" data-pct="0.75" style="padding:0.3rem; font-size:0.75rem; margin:0;">75%</button>
+            <button class="qty-btn btn-secondary" data-pct="1" style="padding:0.3rem; font-size:0.75rem; margin:0;">Max</button>
           </div>
-          <div class="row" style="margin-top:0.3rem;">
-            <span class="text-muted" id="summary-available">Cash: 10 000,00€</span>
+
+          <div class="form-group" id="limit-price-group" style="display:none;">
+            <label>Prix limite (€)</label>
+            <input type="number" id="order-limit-price" min="0.01" step="0.01" placeholder="Prix souhaité">
           </div>
+
+          <div class="order-summary">
+            <div class="row">
+              <span class="text-muted">Prix unitaire</span>
+              <span id="summary-price">—</span>
+            </div>
+            <div class="row total">
+              <span>Total</span>
+              <span id="summary-total">—</span>
+            </div>
+            <div class="row" style="margin-top:0.3rem;">
+              <span class="text-muted" id="summary-available">Cash: 10 000,00€</span>
+            </div>
+          </div>
+
+          <button class="btn-order buy" id="btn-submit-order" disabled>ACHETER</button>
         </div>
-
-        <button class="btn-order buy" id="btn-submit-order" disabled>ACHETER</button>
       </div>
 
-      <div class="panel-title" style="margin-top:1rem;">📅 Agenda économique</div>
-      <div id="calendar-events" class="calendar-events">
-        <div class="text-muted" style="font-size:0.8rem;">Chargement du calendrier...</div>
+      <!-- TAB: Calendar -->
+      <div class="right-tab-content" id="rtab-calendar">
+        <div class="panel-title">📅 Agenda économique</div>
+        <p class="text-muted" style="font-size:0.8rem; margin-bottom:0.75rem;">Événements programmés pendant la séance. L'impact n'est révélé qu'au moment T.</p>
+        <div id="calendar-events" class="calendar-events calendar-events-full">
+          <div class="text-muted" style="font-size:0.8rem;">Chargement du calendrier...</div>
+        </div>
       </div>
 
-      <div class="panel-title" style="margin-top:1rem;">Fil d'actualité</div>
-      <div id="news-feed" class="news-feed">
-        <div class="text-muted" style="font-size:0.8rem;">Les flash infos apparaîtront ici...</div>
+      <!-- TAB: News -->
+      <div class="right-tab-content" id="rtab-news">
+        <div class="panel-title">📰 Fil d'actualité</div>
+        <p class="text-muted" style="font-size:0.8rem; margin-bottom:0.75rem;">Flash infos et résultats des événements du calendrier.</p>
+        <div id="news-feed" class="news-feed news-feed-full">
+          <div class="text-muted" style="font-size:0.8rem;">Les flash infos apparaîtront ici...</div>
+        </div>
       </div>
     </div>
 

@@ -91,6 +91,31 @@ const Sync = (() => {
     return roomCode;
   }
 
+  // Sauver les settings de la salle dans Firebase (durée + budget)
+  function saveRoomSettings(duration, budget) {
+    if (firebaseAvailable && roomRef) {
+      roomRef.update({ duration, budget });
+    }
+  }
+
+  // Charger les settings de la salle depuis Firebase
+  function loadRoomSettings(callback) {
+    if (firebaseAvailable && roomRef) {
+      roomRef.once('value', snap => {
+        const val = snap.val();
+        if (val) {
+          const duration = val.duration || 3600000;
+          const budget = val.budget || 10000;
+          // Sauver en local pour usage offline
+          localStorage.setItem('bourse_duration_' + roomCode, duration.toString());
+          localStorage.setItem('bourse_budget_' + roomCode, budget.toString());
+          if (callback) callback({ duration, budget });
+        }
+      });
+    }
+  }
+  }
+
   function joinRoom(code, name) {
     roomCode = code;
     playerName = name;
@@ -227,6 +252,8 @@ const Sync = (() => {
     createRoom,
     joinRoom,
     listenOnly,
+    saveRoomSettings,
+    loadRoomSettings,
     updateScore,
     getLeaderboard,
     onLeaderboardUpdate,

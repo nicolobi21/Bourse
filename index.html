@@ -134,9 +134,11 @@
       Sync.init();
 
       const code = Sync.createRoom(name);
-      // Save duration and budget
-      localStorage.setItem('bourse_duration_' + code, (selectedDuration * 60 * 1000).toString());
+      // Save duration and budget (local + Firebase)
+      const durationMs = selectedDuration * 60 * 1000;
+      localStorage.setItem('bourse_duration_' + code, durationMs.toString());
       localStorage.setItem('bourse_budget_' + code, selectedBudget.toString());
+      Sync.saveRoomSettings(durationMs, selectedBudget);
 
       document.getElementById('display-room-code').textContent = code;
       document.getElementById('room-created').classList.remove('hidden');
