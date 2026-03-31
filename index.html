@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BEL Bourse — Simulateur de Trading</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="landing-page">
+    <div class="landing-logo">📊 BEL Bourse</div>
+    <div class="landing-subtitle">Simulateur de trading — Actions belges</div>
+
+    <div class="landing-card">
+      <div class="landing-tabs">
+        <button class="landing-tab active" onclick="switchTab('create')">Créer une partie</button>
+        <button class="landing-tab" onclick="switchTab('join')">Rejoindre</button>
+      </div>
+
+      <!-- Créer une partie -->
+      <div id="tab-create" class="tab-content active">
+        <div class="form-group">
+          <label>Ton prénom</label>
+          <input type="text" id="create-name" placeholder="Ex: Manon" maxlength="20" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label>Durée de la partie</label>
+          <div class="duration-select" id="duration-select">
+            <button class="duration-btn" data-min="15">15 min</button>
+            <button class="duration-btn" data-min="30">30 min</button>
+            <button class="duration-btn" data-min="45">45 min</button>
+            <button class="duration-btn active" data-min="60">1h</button>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Budget de départ</label>
+          <div class="duration-select" id="budget-select">
+            <button class="duration-btn budget-btn" data-budget="5000">5 000€</button>
+            <button class="duration-btn budget-btn active" data-budget="10000">10 000€</button>
+            <button class="duration-btn budget-btn" data-budget="25000">25 000€</button>
+            <button class="duration-btn budget-btn" data-budget="50000">50 000€</button>
+          </div>
+        </div>
+        <button class="btn-primary" onclick="createGame()">Créer la salle</button>
+
+        <div id="room-created" class="hidden" style="margin-top:1.5rem; text-align:center;">
+          <p style="color:var(--text-muted); margin-bottom:0.5rem;">Code de la salle :</p>
+          <div style="font-size:2.5rem; font-weight:800; letter-spacing:0.15em; color:var(--accent);" id="display-room-code"></div>
+          <p style="color:var(--text-muted); font-size:0.85rem; margin-top:0.5rem;">Communique ce code à tes élèves</p>
+          <button class="btn-primary" onclick="startGame()" style="margin-top:1rem;">Commencer la partie</button>
+        </div>
+      </div>
+
+      <!-- Rejoindre une partie -->
+      <div id="tab-join" class="tab-content">
+        <div class="form-group">
+          <label>Ton prénom</label>
+          <input type="text" id="join-name" placeholder="Ex: Lucas" maxlength="20" autocomplete="off">
+        </div>
+        <div class="form-group" style="margin-top:0.75rem;">
+          <label>Code de la salle</label>
+          <input type="text" id="join-code" placeholder="Ex: ABC12" maxlength="5" style="text-transform:uppercase; letter-spacing:0.1em; text-align:center; font-size:1.3rem;" autocomplete="off">
+        </div>
+        <button class="btn-primary" onclick="joinGame()" style="margin-top:0.5rem;">Rejoindre</button>
+      </div>
+
+      <div class="or-divider">ou</div>
+      <button class="btn-secondary" onclick="playOffline()">Jouer en solo (hors-ligne)</button>
+    </div>
+
+    <p style="margin-top:2rem; color:var(--text-muted); font-size:0.8rem;" id="landing-footer">
+      Jeu pédagogique — Capital fictif de 10 000€ — Partie de 1h
+    </p>
+  </div>
+
+  <!-- Firebase SDK (optionnel) -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+  <script src="js/market.js"></script>
+  <script src="js/portfolio.js"></script>
+  <script src="js/sync.js"></script>
+
+  <script>
+    function switchTab(tab) {
+      document.querySelectorAll('.landing-tab').forEach((el, i) => {
+        el.classList.toggle('active', (tab === 'create' && i === 0) || (tab === 'join' && i === 1));
+      });
+      document.getElementById('tab-create').classList.toggle('active', tab === 'create');
+      document.getElementById('tab-join').classList.toggle('active', tab === 'join');
+    }
+
+    let selectedDuration = 60;
+    let selectedBudget = 10000;
+
+    function updateFooter() {
+      const footer = document.getElementById('landing-footer');
+      if (footer) {
+        const dLabel = selectedDuration >= 60 ? (selectedDuration / 60) + 'h' : selectedDuration + ' min';
+        const bLabel = selectedBudget.toLocaleString('fr-BE') + '€';
+        footer.textContent = `Jeu pédagogique — Capital fictif de ${bLabel} — Partie de ${dLabel}`;
+      }
+    }
+
+    // Duration buttons
+    document.querySelectorAll('#duration-select .duration-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('#duration-select .duration-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        selectedDuration = parseInt(btn.dataset.min);
+        updateFooter();
+      });
+    });
+
+    // Budget buttons
+    document.querySelectorAll('#budget-select .budget-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('#budget-select .budget-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        selectedBudget = parseInt(btn.dataset.budget);
+        updateFooter();
+      });
+    });
+
+    function createGame() {
+      const name = document.getElementById('create-name').value.trim();
+      if (!name) {
+        document.getElementById('create-name').focus();
+        return;
+      }
+
+      Market.init();
+      Portfolio.init();
+      Sync.init();
+
+      const code = Sync.createRoom(name);
+      // Save duration and budget
+      localStorage.setItem('bourse_duration_' + code, (selectedDuration * 60 * 1000).toString());
+      localStorage.setItem('bourse_budget_' + code, selectedBudget.toString());
+
+      document.getElementById('display-room-code').textContent = code;
+      document.getElementById('room-created').classList.remove('hidden');
+    }
+
+    function joinGame() {
+      const name = document.getElementById('join-name').value.trim();
+      const code = document.getElementById('join-code').value.trim().toUpperCase();
+
+      if (!name) { document.getElementById('join-name').focus(); return; }
+      if (!code || code.length !== 5) { document.getElementById('join-code').focus(); return; }
+
+      Market.init();
+      Portfolio.init();
+      Sync.init();
+      Sync.joinRoom(code, name);
+
+      window.location.href = 'game.html';
+    }
+
+    function startGame() {
+      window.location.href = 'game.html';
+    }
+
+    function playOffline() {
+      const nameInput = document.getElementById('create-name');
+      let name = nameInput ? nameInput.value.trim() : '';
+      if (!name) {
+        name = prompt('Ton prénom :');
+        if (!name || !name.trim()) return;
+        name = name.trim();
+      }
+
+      Market.init();
+      Portfolio.init();
+      Sync.init();
+      const code = Sync.createRoom(name);
+      localStorage.setItem('bourse_duration_' + code, (selectedDuration * 60 * 1000).toString());
+      localStorage.setItem('bourse_budget_' + code, selectedBudget.toString());
+
+      window.location.href = 'game.html';
+    }
+
+    // Auto-uppercase pour le code
+    document.getElementById('join-code')?.addEventListener('input', function() {
+      this.value = this.value.toUpperCase();
+    });
+
+    // Enter key support
+    document.getElementById('create-name')?.addEventListener('keydown', e => { if (e.key === 'Enter') createGame(); });
+    document.getElementById('join-name')?.addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('join-code').focus(); });
+    document.getElementById('join-code')?.addEventListener('keydown', e => { if (e.key === 'Enter') joinGame(); });
+  </script>
+</body>
+</html>

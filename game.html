@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BEL Bourse — Trading</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <!-- TICKER BAR -->
+  <div class="ticker-bar">
+    <div class="ticker-content" id="ticker-content"></div>
+  </div>
+
+  <!-- HEADER -->
+  <div class="game-header">
+    <div class="logo">📊 BEL Bourse</div>
+    <div class="player-info">
+      <span id="header-player-name" class="text-muted"></span>
+      <span>Portefeuille: <strong id="header-total-value">10 000,00€</strong></span>
+      <span id="header-pnl" class="text-green">+0.00%</span>
+      <button class="achievements-btn" onclick="App.toggleAchievements()">🏆 <span id="achievements-count">0/12</span></button>
+      <div class="timer" id="game-timer">60:00</div>
+    </div>
+  </div>
+
+  <!-- MAIN LAYOUT -->
+  <div class="game-layout">
+    <!-- LEFT: Stock list + Order Book -->
+    <div class="panel" id="panel-left">
+      <div class="panel-title">Actions BEL</div>
+      <div class="stock-list" id="stock-list"></div>
+
+      <!-- Company info -->
+      <div class="panel-title" style="margin-top:1.25rem;">Fiche entreprise</div>
+      <div id="company-info" class="company-info"></div>
+
+      <div class="panel-title" style="margin-top:1.25rem;">Carnet de cotation</div>
+      <div id="orderbook-container"></div>
+
+      <!-- Pending orders -->
+      <div class="panel-title" style="margin-top:1.25rem;">Ordres en attente</div>
+      <div id="pending-orders" class="text-muted" style="font-size:0.8rem;">Aucun ordre limite en attente</div>
+    </div>
+
+    <!-- CENTER: Chart -->
+    <div class="panel chart-panel">
+      <div class="chart-header">
+        <div>
+          <div class="chart-stock-info">
+            <span class="name" id="chart-name">AB InBev</span>
+            <span class="current-price" id="chart-price">52.00€</span>
+            <span class="change-info text-green" id="chart-change">+0.00€ (0.00%)</span>
+          </div>
+          <div class="chart-detail" id="chart-detail"></div>
+        </div>
+      </div>
+      <div class="chart-container">
+        <canvas id="price-chart"></canvas>
+      </div>
+    </div>
+
+    <!-- RIGHT: Order Panel -->
+    <div class="panel order-panel" id="panel-right">
+      <div class="panel-title">Passer un ordre</div>
+
+      <!-- Buy / Sell -->
+      <div class="order-tabs">
+        <button class="order-tab active buy" data-side="buy">Acheter</button>
+        <button class="order-tab sell" data-side="sell">Vendre</button>
+      </div>
+
+      <!-- Market / Limit -->
+      <div class="order-type-tabs">
+        <button class="order-type-tab active" data-type="market">Au marché</button>
+        <button class="order-type-tab" data-type="limit">Cours limité</button>
+      </div>
+
+      <div class="order-form">
+        <div class="form-group">
+          <label>Quantité</label>
+          <input type="number" id="order-quantity" min="1" step="1" placeholder="Nombre d'actions">
+        </div>
+
+        <!-- Quick qty buttons -->
+        <div style="display:flex; gap:4px;">
+          <button class="qty-btn btn-secondary" data-pct="0.25" style="padding:0.3rem; font-size:0.75rem; margin:0;">25%</button>
+          <button class="qty-btn btn-secondary" data-pct="0.5" style="padding:0.3rem; font-size:0.75rem; margin:0;">50%</button>
+          <button class="qty-btn btn-secondary" data-pct="0.75" style="padding:0.3rem; font-size:0.75rem; margin:0;">75%</button>
+          <button class="qty-btn btn-secondary" data-pct="1" style="padding:0.3rem; font-size:0.75rem; margin:0;">Max</button>
+        </div>
+
+        <div class="form-group" id="limit-price-group" style="display:none;">
+          <label>Prix limite (€)</label>
+          <input type="number" id="order-limit-price" min="0.01" step="0.01" placeholder="Prix souhaité">
+        </div>
+
+        <div class="order-summary">
+          <div class="row">
+            <span class="text-muted">Prix unitaire</span>
+            <span id="summary-price">—</span>
+          </div>
+          <div class="row total">
+            <span>Total</span>
+            <span id="summary-total">—</span>
+          </div>
+          <div class="row" style="margin-top:0.3rem;">
+            <span class="text-muted" id="summary-available">Cash: 10 000,00€</span>
+          </div>
+        </div>
+
+        <button class="btn-order buy" id="btn-submit-order" disabled>ACHETER</button>
+      </div>
+
+      <div class="panel-title" style="margin-top:1rem;">📅 Agenda économique</div>
+      <div id="calendar-events" class="calendar-events">
+        <div class="text-muted" style="font-size:0.8rem;">Chargement du calendrier...</div>
+      </div>
+
+      <div class="panel-title" style="margin-top:1rem;">Fil d'actualité</div>
+      <div id="news-feed" class="news-feed">
+        <div class="text-muted" style="font-size:0.8rem;">Les flash infos apparaîtront ici...</div>
+      </div>
+    </div>
+
+    <!-- BOTTOM: Portfolio -->
+    <div class="portfolio-bar">
+      <div class="portfolio-section">
+        <div class="panel-title">Résumé</div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.5rem; font-size:0.85rem; margin-bottom:0.75rem;">
+          <div>Cash: <strong id="portfolio-cash">10 000,00€</strong></div>
+          <div>Total: <strong id="portfolio-total">10 000,00€</strong></div>
+          <div>PnL latent: <span id="portfolio-unrealized" class="text-green">+0,00€</span></div>
+          <div>PnL réalisé: <span id="portfolio-realized" class="text-green">+0,00€</span></div>
+        </div>
+
+        <div class="portfolio-chart-container">
+          <canvas id="portfolio-chart"></canvas>
+        </div>
+        <div class="panel-title">Positions ouvertes</div>
+        <table class="positions-table">
+          <thead>
+            <tr><th>Action</th><th>Qté</th><th>PRU</th><th>Cours</th><th>PnL</th><th>%</th></tr>
+          </thead>
+          <tbody id="positions-tbody">
+            <tr><td colspan="6" class="text-muted text-center">Aucune position</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="portfolio-section">
+        <div class="panel-title">Historique des transactions</div>
+        <table class="history-table">
+          <thead>
+            <tr><th>Heure</th><th>Type</th><th>Action</th><th>Détail</th><th>Total</th></tr>
+          </thead>
+          <tbody id="history-tbody">
+            <tr><td colspan="5" class="text-muted text-center">Aucune transaction</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ACHIEVEMENTS PANEL -->
+  <div class="achievements-panel hidden" id="achievements-panel">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+      <h3>🏆 Succès</h3>
+      <button class="btn-secondary" style="width:auto; padding:0.3rem 0.75rem; margin:0; font-size:0.8rem;" onclick="App.toggleAchievements()">Fermer</button>
+    </div>
+    <div id="achievements-list"></div>
+  </div>
+
+  <!-- MOBILE NAVIGATION -->
+  <div class="mobile-nav" id="mobile-nav">
+    <button class="active" data-panel="stocks"><span class="nav-icon">📋</span>Actions</button>
+    <button data-panel="chart"><span class="nav-icon">📈</span>Graphique</button>
+    <button data-panel="order"><span class="nav-icon">💱</span>Ordres</button>
+    <button data-panel="portfolio"><span class="nav-icon">💼</span>Portefeuille</button>
+  </div>
+
+  <!-- FLASH NEWS BANNER -->
+  <div class="flash-news hidden" id="flash-news">
+    <div class="flash-label">⚡ Flash Info</div>
+    <div class="flash-text"></div>
+    <div class="flash-impact"></div>
+  </div>
+
+  <!-- MARKET CLOSED OVERLAY -->
+  <div class="market-closed-overlay hidden" id="market-closed-overlay">
+    <h1>🔔 Marché fermé</h1>
+    <div class="final-value" id="final-value">10 000,00€</div>
+    <div class="final-pnl text-green" id="final-pnl">+0.00%</div>
+    <p class="text-muted" style="margin-bottom:1rem;">La séance de trading est terminée !</p>
+    <a href="leaderboard.html" class="btn-primary" style="max-width:300px; text-decoration:none; display:block; text-align:center;">Voir le classement</a>
+  </div>
+
+  <!-- TUTORIAL OVERLAY -->
+  <div class="tutorial-overlay hidden" id="tutorial-overlay">
+    <div class="tutorial-card">
+      <h2>Bienvenue sur BEL Bourse !</h2>
+
+      <div class="step active">
+        <p><strong>Tu disposes de <span id="tutorial-budget">10 000</span>€ en capital fictif.</strong></p>
+        <p>Ton objectif : faire fructifier ce capital en achetant et vendant des actions d'entreprises belges pendant <span id="tutorial-duration">1 heure</span>.</p>
+        <p>Le joueur avec la plus grande valeur de portefeuille à la fin gagne !</p>
+      </div>
+
+      <div class="step">
+        <p><strong>À gauche</strong>, tu vois la liste des 7 actions disponibles avec leur prix en temps réel.</p>
+        <p>Clique sur une action pour voir son <strong>graphique</strong> au centre et son <strong>carnet de cotation</strong> (les ordres d'achat et de vente en attente).</p>
+      </div>
+
+      <div class="step">
+        <p><strong>À droite</strong>, tu peux passer des ordres :</p>
+        <p>• <strong>Ordre au marché</strong> : exécuté immédiatement au meilleur prix disponible.</p>
+        <p>• <strong>Ordre à cours limité</strong> : tu fixes un prix. L'ordre sera exécuté quand le marché atteint ce prix.</p>
+      </div>
+
+      <div class="step">
+        <p><strong>Attention aux Flash Infos !</strong></p>
+        <p>Des événements économiques apparaissent toutes les 2 à 5 minutes et font bouger les cours. Reste attentif et adapte ta stratégie !</p>
+        <p style="margin-top:1rem;"><strong>Bonne chance ! 🚀</strong></p>
+      </div>
+
+      <div class="tutorial-nav">
+        <button class="btn-secondary" style="width:auto; padding:0.5rem 1.5rem;" onclick="App.prevTutorial()">Précédent</button>
+        <div class="tutorial-dots">
+          <div class="tutorial-dot active"></div>
+          <div class="tutorial-dot"></div>
+          <div class="tutorial-dot"></div>
+          <div class="tutorial-dot"></div>
+        </div>
+        <button class="btn-primary" style="width:auto; padding:0.5rem 1.5rem;" onclick="App.nextTutorial()">Suivant</button>
+      </div>
+      <button class="btn-secondary" style="margin-top:0.75rem; font-size:0.85rem;" onclick="App.closeTutorial()">Passer le tutoriel</button>
+    </div>
+  </div>
+
+  <!-- Firebase SDK (optionnel) -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+  <!-- Game modules -->
+  <script src="js/market.js"></script>
+  <script src="js/orderbook.js"></script>
+  <script src="js/portfolio.js"></script>
+  <script src="js/events.js"></script>
+  <script src="js/charts.js"></script>
+  <script src="js/sync.js"></script>
+  <script src="js/app.js"></script>
+
+  <script>
+    function bootGame() {
+      Sync.init();
+      if (!Sync.restoreSession()) {
+        window.location.href = 'index.html';
+        return;
+      }
+      document.getElementById('header-player-name').textContent = Sync.getPlayerName();
+      App.initGame();
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', bootGame);
+    } else {
+      bootGame();
+    }
+  </script>
+</body>
+</html>

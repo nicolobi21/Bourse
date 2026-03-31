@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BEL Bourse — Classement</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="leaderboard-page">
+    <div class="title">📊 BEL Bourse — Classement</div>
+    <div class="room-code">Salle : <strong id="lb-room-code">—</strong></div>
+
+    <div class="leaderboard-market-status">
+      Statut du marché : <span id="lb-market-status" class="market-open">Ouvert</span>
+      <span id="lb-timer" style="margin-left:1rem; font-weight:700; font-variant-numeric:tabular-nums;"></span>
+    </div>
+
+    <table class="leaderboard-table" style="margin-top:1.5rem;">
+      <thead>
+        <tr>
+          <th style="width:60px;">#</th>
+          <th>Joueur</th>
+          <th style="text-align:right;">Valeur du portefeuille</th>
+          <th style="text-align:right;">Performance</th>
+          <th style="text-align:right;">Positions</th>
+        </tr>
+      </thead>
+      <tbody id="lb-tbody">
+        <tr><td colspan="5" class="text-muted text-center">En attente des joueurs...</td></tr>
+      </tbody>
+    </table>
+
+    <div style="margin-top:2rem; display:flex; gap:1rem; flex-wrap:wrap;">
+      <a href="index.html" class="btn-secondary" style="text-decoration:none; text-align:center; padding:0.75rem 2rem; width:auto;">Retour à l'accueil</a>
+      <button class="btn-primary" style="width:auto; padding:0.75rem 2rem;" onclick="refreshLeaderboard()">Rafraîchir</button>
+      <button class="btn-secondary" style="width:auto; padding:0.75rem 2rem; border-color:var(--green); color:var(--green);" onclick="exportCSV()">📥 Exporter CSV</button>
+    </div>
+
+    <p class="text-muted" style="margin-top:2rem; font-size:0.8rem;">
+      Le classement se met à jour automatiquement toutes les 5 secondes.
+    </p>
+  </div>
+
+  <!-- Firebase SDK (optionnel) -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+  <script src="js/market.js"></script>
+  <script src="js/portfolio.js"></script>
+  <script src="js/sync.js"></script>
+
+  <script>
+    let refreshInterval = null;
+
+    Sync.init();
+
+    // Restore session info
+    const roomCode = localStorage.getItem('bourse_room');
+    const playerName = localStorage.getItem('bourse_player');
+
+    document.getElementById('lb-room-code').textContent = roomCode || 'Mode solo';
+
+    if (roomCode && Sync.isFirebaseAvailable()) {
+      // Ne pas appeler joinRoom ici — cela écraserait les scores
+      // On écoute juste le leaderboard sans se ré-enregistrer
+      Sync.restoreSession();
+      Sync.listenOnly(roomCode);
+      Sync.onLeaderboardUpdate(renderLeaderboard);
+    }
+
+    // Aussi charger depuis localStorage
+    refreshLeaderboard();
+    refreshInterval = setInterval(refreshLeaderboard, 5000);
+
+    // Timer sync
+    const gameStart = localStorage.getItem('bourse_gameStart_' + roomCode);
+    const gameDuration = parseInt(localStorage.getItem('bourse_duration_' + roomCode)) || 3600000;
+    if (gameStart) {
+      setInterval(() => {
+        const elapsed = Date.now() - parseInt(gameStart);
+        const remaining = Math.max(0, gameDuration - elapsed);
+        const min = Math.floor(remaining / 60000);
+        const sec = Math.floor((remaining % 60000) / 1000);
+
+        const timerEl = document.getElementById('lb-timer');
+        const statusEl = document.getElementById('lb-market-status');
+
+        if (remaining <= 0) {
+          if (timerEl) timerEl.textContent = '';
+          if (statusEl) {
+            statusEl.textContent = 'Fermé';
+            statusEl.className = 'market-closed';
+          }
+        } else {
+          if (timerEl) timerEl.textContent = `${min.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
+          if (statusEl) {
+            statusEl.textContent = 'Ouvert';
+            statusEl.className = 'market-open';
+          }
+        }
+      }, 1000);
+    }
+
+    function refreshLeaderboard() {
+      // Essayer Firebase d'abord
+      let players = Sync.getLeaderboard();
+
+      // Fallback localStorage
+      if (players.length === 0 && roomCode) {
+        const localPlayers = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key.startsWith('bourse_score_' + roomCode + '_')) {
+            try {
+              localPlayers.push(JSON.parse(localStorage.getItem(key)));
+            } catch (e) {}
+          }
+        }
+        localPlayers.sort((a, b) => b.totalValue - a.totalValue);
+        if (localPlayers.length > 0) {
+          renderLeaderboard(localPlayers);
+        }
+      } else if (players.length > 0) {
+        renderLeaderboard(players);
+      }
+    }
+
+    function renderLeaderboard(players) {
+      const tbody = document.getElementById('lb-tbody');
+      if (!tbody || !players || players.length === 0) return;
+
+      tbody.innerHTML = players.map((p, i) => {
+        const rank = i + 1;
+        let rankClass = '';
+        let medal = '';
+        if (rank === 1) { rankClass = 'rank-1'; medal = '🥇'; }
+        else if (rank === 2) { rankClass = 'rank-2'; medal = '🥈'; }
+        else if (rank === 3) { rankClass = 'rank-3'; medal = '🥉'; }
+
+        const perfClass = p.performancePct >= 0 ? 'text-green' : 'text-red';
+        const perfSign = p.performancePct >= 0 ? '+' : '';
+
+        return `<tr>
+          <td class="${rankClass}">${medal} ${rank}</td>
+          <td><strong>${escapeHtml(p.name)}</strong></td>
+          <td style="text-align:right; font-weight:700;">${p.totalValue.toLocaleString('fr-BE', { minimumFractionDigits: 2 })}€</td>
+          <td style="text-align:right;" class="${perfClass}">${perfSign}${p.performancePct.toFixed(2)}%</td>
+          <td style="text-align:right;">${p.positionsCount || 0}</td>
+        </tr>`;
+      }).join('');
+    }
+
+    function escapeHtml(str) {
+      const div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    }
+
+    function exportCSV() {
+      let players = Sync.getLeaderboard();
+
+      // Fallback localStorage
+      if (players.length === 0 && roomCode) {
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key.startsWith('bourse_score_' + roomCode + '_')) {
+            try { players.push(JSON.parse(localStorage.getItem(key))); } catch(e) {}
+          }
+        }
+        players.sort((a, b) => b.totalValue - a.totalValue);
+      }
+
+      if (players.length === 0) {
+        alert('Aucun joueur à exporter.');
+        return;
+      }
+
+      // BOM for Excel to read UTF-8 properly
+      let csv = '\uFEFF';
+      csv += 'Rang;Joueur;Valeur Portefeuille (€);Performance (%);Cash (€);Positions\n';
+
+      players.forEach((p, i) => {
+        csv += `${i+1};${p.name};${p.totalValue.toFixed(2).replace('.', ',')};${p.performancePct.toFixed(2).replace('.', ',')};${(p.cash || 0).toFixed(2).replace('.', ',')};${p.positionsCount || 0}\n`;
+      });
+
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `bourse_classement_${roomCode || 'solo'}_${new Date().toISOString().slice(0,10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+  </script>
+</body>
+</html>
