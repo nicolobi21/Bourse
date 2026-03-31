@@ -6,6 +6,7 @@ const Charts = (() => {
   let chart = null;
   let currentSymbol = null;
   let tradeMarkers = []; // Points d'achat/vente du joueur
+  let timeframeSeconds = 0; // 0 = all, 60 = 1min, 300 = 5min, 900 = 15min
 
   function init(canvasId, symbol) {
     currentSymbol = symbol;
@@ -97,10 +98,22 @@ const Charts = (() => {
     });
   }
 
+  function setTimeframe(seconds) {
+    timeframeSeconds = seconds;
+    update();
+  }
+
   function update() {
     if (!chart || !currentSymbol) return;
 
-    const history = Market.getHistory(currentSymbol);
+    let history = Market.getHistory(currentSymbol);
+
+    // Filter by timeframe
+    if (timeframeSeconds > 0 && history.length > 0) {
+      const cutoff = Date.now() - timeframeSeconds * 1000;
+      history = history.filter(h => h.time >= cutoff);
+    }
+
     const labels = history.map(h => {
       const d = new Date(h.time);
       return d.getHours().toString().padStart(2, '0') + ':' +
@@ -159,5 +172,5 @@ const Charts = (() => {
     return chart;
   }
 
-  return { init, update, switchStock, getChart };
+  return { init, update, switchStock, setTimeframe, getChart };
 })();

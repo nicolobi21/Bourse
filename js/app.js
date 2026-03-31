@@ -113,13 +113,16 @@ const App = (() => {
       updatePortfolioChart();
       checkAchievements();
       Sync.updateScore();
+      updateLiveLeaderboard(Sync.getLeaderboard());
     }, 5000);
 
     // Init portfolio mini-chart
     initPortfolioChart();
 
-    // Setup tabs and mobile nav
+    // Setup tabs, timeframes, leaderboard, and mobile nav
     setupRightPanelTabs();
+    setupTimeframeButtons();
+    setupLiveLeaderboard();
     setupMobileNav();
 
     // Show tutorial on first visit
@@ -239,8 +242,10 @@ const App = (() => {
   function updateHeaderValue() {
     const totalEl = document.getElementById('header-total-value');
     const pnlEl = document.getElementById('header-pnl');
+    const cashEl = document.getElementById('header-cash');
 
     if (totalEl) totalEl.textContent = Portfolio.getTotalValue().toLocaleString('fr-BE', { minimumFractionDigits: 2 }) + '€';
+    if (cashEl) cashEl.textContent = Portfolio.getCash().toLocaleString('fr-BE', { minimumFractionDigits: 2 }) + '€';
     if (pnlEl) {
       const pct = Portfolio.getPerformancePct();
       pnlEl.textContent = (pct >= 0 ? '+' : '') + pct.toFixed(2) + '%';
@@ -1061,6 +1066,49 @@ const App = (() => {
       badge.textContent = count;
       tab.appendChild(badge);
     }
+  }
+
+  // ==================== TIMEFRAME BUTTONS ====================
+  function setupTimeframeButtons() {
+    document.querySelectorAll('.tf-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.tf-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        const tf = parseInt(btn.dataset.tf);
+        Charts.setTimeframe(tf);
+      });
+    });
+  }
+
+  // ==================== LIVE LEADERBOARD ====================
+  function setupLiveLeaderboard() {
+    // Listen for Firebase leaderboard updates
+    Sync.onLeaderboardUpdate(updateLiveLeaderboard);
+    // Also update from local data immediately
+    updateLiveLeaderboard(Sync.getLeaderboard());
+  }
+
+  function updateLiveLeaderboard(players) {
+    const tbody = document.getElementById('live-leaderboard-tbody');
+    if (!tbody) return;
+
+    if (!players || players.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="4" class="text-muted text-center">En attente des joueurs...</td></tr>';
+      return;
+    }
+
+    const myName = Sync.getPlayerName();
+    tbody.innerHTML = players.map((p, i) => {
+      const isMe = p.name === myName;
+      const perf = p.performancePct || 0;
+      const perfClass = perf >= 0 ? 'text-green' : 'text-red';
+      return `<tr class="${isMe ? 'is-me' : ''}">
+        <td>${i + 1}</td>
+        <td>${p.name}${isMe ? ' (moi)' : ''}</td>
+        <td style="text-align:right;">${p.totalValue ? p.totalValue.toLocaleString('fr-BE', { minimumFractionDigits: 2 }) + '€' : '-'}</td>
+        <td style="text-align:right;" class="${perfClass}">${perf >= 0 ? '+' : ''}${perf.toFixed(2)}%</td>
+      </tr>`;
+    }).join('');
   }
 
   // ==================== MOBILE NAV ====================
