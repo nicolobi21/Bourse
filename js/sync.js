@@ -111,12 +111,19 @@ const Sync = (() => {
       roomRef.once('value', snap => {
         const val = snap.val();
         if (val) {
-          const duration = val.duration || 3600000;
-          const budget = val.budget || 10000;
-          // Sauver en local pour usage offline
-          localStorage.setItem('bourse_duration_' + roomCode, duration.toString());
-          localStorage.setItem('bourse_budget_' + roomCode, budget.toString());
-          if (callback) callback({ duration, budget });
+          // Seulement utiliser les valeurs Firebase si elles sont EXPLICITEMENT définies
+          // Ne pas écraser localStorage avec des valeurs par défaut
+          const duration = (val.duration && val.duration > 0) ? val.duration : null;
+          const budget   = (val.budget   && val.budget   > 0) ? val.budget   : null;
+
+          if (duration) localStorage.setItem('bourse_duration_' + roomCode, duration.toString());
+          if (budget)   localStorage.setItem('bourse_budget_'   + roomCode, budget.toString());
+
+          // Fallback sur localStorage si Firebase n'a pas de valeur explicite
+          const finalDuration = duration || parseInt(localStorage.getItem('bourse_duration_' + roomCode)) || 3600000;
+          const finalBudget   = budget   || parseInt(localStorage.getItem('bourse_budget_'   + roomCode)) || 10000;
+
+          if (callback) callback({ duration: finalDuration, budget: finalBudget });
         }
       });
     }

@@ -30,7 +30,7 @@ const Portfolio = (() => {
 
   function save() {
     const roomCode = localStorage.getItem('bourse_room') || 'solo';
-    const data = { cash, positions, history, realizedPnL, valueHistory };
+    const data = { cash, positions, history, realizedPnL, valueHistory, initialCapital: INITIAL_CAPITAL };
     localStorage.setItem('bourse_portfolio_' + roomCode, JSON.stringify(data));
   }
 
@@ -40,6 +40,11 @@ const Portfolio = (() => {
     if (!raw) return;
     try {
       const data = JSON.parse(raw);
+      // Si le capital initial a changé (nouveau budget), ignorer l'ancien save
+      if (data.initialCapital && data.initialCapital !== INITIAL_CAPITAL) {
+        localStorage.removeItem('bourse_portfolio_' + roomCode);
+        return;
+      }
       cash = data.cash ?? INITIAL_CAPITAL;
       positions = data.positions ?? {};
       history = data.history ?? [];

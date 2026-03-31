@@ -82,10 +82,14 @@ const App = (() => {
     OrderBook.setOnOrderExecuted((result) => {
       const success = Portfolio.executeTrade(result);
       if (success) {
-        showToast(`Ordre limite exécuté : ${result.side === 'buy' ? 'Achat' : 'Vente'} ${result.quantity}x ${result.symbol} à ${result.price.toFixed(2)}€`, 'success');
+        const isStop = result.type === 'stop';
+        const msg = isStop
+          ? `🛡️ Stop Loss déclenché : Vente ${result.quantity}x ${result.symbol} à ${result.price.toFixed(2)}€`
+          : `Ordre ${result.side === 'buy' ? 'achat' : 'vente'} exécuté : ${result.quantity}x ${result.symbol} à ${result.price.toFixed(2)}€`;
+        showToast(msg, isStop ? 'error' : 'success');
         Sync.updateScore();
       } else {
-        showToast(`Ordre limite rejeté (fonds/actions insuffisants) : ${result.quantity}x ${result.symbol}`, 'error');
+        showToast(`Ordre rejeté (position insuffisante) : ${result.quantity}x ${result.symbol}`, 'error');
       }
       updatePendingOrders();
     });
@@ -424,10 +428,18 @@ const App = (() => {
     }
 
     container.innerHTML = orders.map(o => {
-      const sideClass = o.side === 'buy' ? 'text-green' : 'text-red';
-      const sideText = o.side === 'buy' ? 'Achat' : 'Vente';
+      let label, priceStr, labelClass;
+      if (o.type === 'stop') {
+        label = '🛡️ Stop';
+        labelClass = 'text-red';
+        priceStr = `déclenchement ≤ ${o.stopPrice.toFixed(2)}€`;
+      } else {
+        labelClass = o.side === 'buy' ? 'text-green' : 'text-red';
+        label = o.side === 'buy' ? 'Limite Achat' : 'Limite Vente';
+        priceStr = `@ ${o.limitPrice.toFixed(2)}€`;
+      }
       return `<div style="display:flex; justify-content:space-between; align-items:center; padding:0.3rem 0; font-size:0.8rem; border-bottom:1px solid var(--border);">
-        <span><span class="${sideClass}">${sideText}</span> ${o.quantity}x ${o.symbol} @ ${o.limitPrice.toFixed(2)}€</span>
+        <span><span class="${labelClass}">${label}</span> ${o.quantity}x ${o.symbol} ${priceStr}</span>
         <button onclick="App.cancelOrder(${o.id})" style="background:var(--red); color:white; border:none; border-radius:3px; padding:0.15rem 0.4rem; font-size:0.7rem; cursor:pointer;">✕</button>
       </div>`;
     }).join('');
@@ -464,9 +476,14 @@ const App = (() => {
     // Quantity input
     const qtyInput = document.getElementById('order-quantity');
     const priceInput = document.getElementById('order-limit-price');
+    const stopInput = document.getElementById('order-stop-price');
 
-    if (qtyInput) qtyInput.addEventListener('input', updateOrderSummary);
+    if (qtyInput) {
+      qtyInput.addEventListener('input', updateOrderSummary);
+      qtyInput.addEventListener('keydown', e => { if (e.key === 'Enter') submitOrder(); });
+    }
     if (priceInput) priceInput.addEventListener('input', updateOrderSummary);
+    if (stopInput) stopInput.addEventListener('input', updateOrderSummary);
 
     // Submit
     const submitBtn = document.getElementById('btn-submit-order');
@@ -483,15 +500,31 @@ const App = (() => {
 
   function updateOrderPanel() {
     const limitGroup = document.getElementById('limit-price-group');
-    if (limitGroup) {
-      limitGroup.style.display = orderType === 'limit' ? 'flex' : 'none';
+    const stopGroup = document.getElementById('stop-price-group');
+    const stopInfo = document.getElementById('stop-loss-info');
+
+    if (limitGroup) limitGroup.style.display = orderType === 'limit' ? 'flex' : 'none';
+    if (stopGroup)  stopGroup.style.display  = orderType === 'stop'  ? 'flex' : 'none';
+    if (stopInfo)   stopInfo.classList.toggle('hidden', orderType !== 'stop');
+
+    // Stop loss = vente uniquement → forcer le côté "sell"
+    if (orderType === 'stop') {
+      orderSide = 'sell';
+      document.querySelectorAll('.order-tab').forEach(t => {
+        t.classList.toggle('active', t.dataset.side === 'sell');
+      });
     }
 
     // Update button text & color
     const btn = document.getElementById('btn-submit-order');
     if (btn) {
-      btn.textContent = orderSide === 'buy' ? 'ACHETER' : 'VENDRE';
-      btn.className = 'btn-order ' + orderSide;
+      if (orderType === 'stop') {
+        btn.textContent = 'PLACER STOP LOSS';
+        btn.className = 'btn-order sell';
+      } else {
+        btn.textContent = orderSide === 'buy' ? 'ACHETER' : 'VENDRE';
+        btn.className = 'btn-order ' + orderSide;
+      }
     }
 
     // Pre-fill limit price
@@ -500,6 +533,15 @@ const App = (() => {
       const priceInput = document.getElementById('order-limit-price');
       if (p && priceInput && !priceInput.value) {
         priceInput.value = orderSide === 'buy' ? p.ask.toFixed(2) : p.bid.toFixed(2);
+      }
+    }
+
+    // Pre-fill stop price (légèrement sous le bid actuel)
+    if (orderType === 'stop') {
+      const p = Market.getPrice(selectedStock);
+      const stopInput = document.getElementById('order-stop-price');
+      if (p && stopInput && !stopInput.value) {
+        stopInput.value = (p.bid * 0.97).toFixed(2); // -3% par défaut
       }
     }
 
@@ -545,6 +587,8 @@ const App = (() => {
     let price;
     if (orderType === 'limit') {
       price = parseFloat(document.getElementById('order-limit-price')?.value) || 0;
+    } else if (orderType === 'stop') {
+      price = parseFloat(document.getElementById('order-stop-price')?.value) || 0;
     } else {
       price = orderSide === 'buy' ? p.ask : p.bid;
     }
@@ -575,7 +619,14 @@ const App = (() => {
     const btn = document.getElementById('btn-submit-order');
     if (btn) {
       let enabled = quantity > 0 && price > 0 && Market.isOpen();
-      if (orderSide === 'buy') {
+      if (orderType === 'stop') {
+        // Stop loss : vérifier qu'on possède assez d'actions et que le prix stop est sous le bid actuel
+        const pos = Portfolio.getPosition(selectedStock);
+        const reservedQty = getPendingReserved(selectedStock, 'sell');
+        const hasPosition = pos && (pos.quantity - reservedQty) >= quantity;
+        const stopBelowBid = price < p.bid;
+        enabled = enabled && hasPosition && stopBelowBid;
+      } else if (orderSide === 'buy') {
         const reservedCash = getPendingReserved(selectedStock, 'buy');
         enabled = enabled && total <= (Portfolio.getCash() - reservedCash);
       } else {
@@ -607,12 +658,21 @@ const App = (() => {
           showToast('Fonds insuffisants ou position manquante', 'error');
         }
       }
-    } else {
+    } else if (orderType === 'limit') {
       const limitPrice = parseFloat(document.getElementById('order-limit-price')?.value);
       if (!limitPrice) return;
       result = OrderBook.placeLimitOrder(selectedStock, orderSide, quantity, limitPrice);
       if (result) {
         showToast(`Ordre limite placé : ${orderSide === 'buy' ? 'Achat' : 'Vente'} ${quantity}x ${selectedStock} à ${limitPrice.toFixed(2)}€`, 'success');
+        updatePendingOrders();
+      }
+    } else if (orderType === 'stop') {
+      const stopPrice = parseFloat(document.getElementById('order-stop-price')?.value);
+      if (!stopPrice) return;
+      result = OrderBook.placeStopOrder(selectedStock, quantity, stopPrice);
+      if (result) {
+        showToast(`🛡️ Stop Loss placé : ${quantity}x ${selectedStock} — déclenchement à ${stopPrice.toFixed(2)}€`, 'success');
+        document.getElementById('order-stop-price').value = '';
         updatePendingOrders();
       }
     }

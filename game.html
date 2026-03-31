@@ -18,8 +18,8 @@
     <div class="logo">📊 BEL Bourse</div>
     <div class="player-info">
       <span id="header-player-name" class="text-muted"></span>
-      <span>Portefeuille: <strong id="header-total-value">10 000,00€</strong></span>
-      <span>Cash: <strong id="header-cash">10 000,00€</strong></span>
+      <span>Valeur totale: <strong id="header-total-value">10 000,00€</strong></span>
+      <span>💵 Cash dispo: <strong id="header-cash">10 000,00€</strong></span>
       <span id="header-pnl" class="text-green">+0.00%</span>
       <button class="achievements-btn" onclick="App.toggleAchievements()">🏆 <span id="achievements-count">0/12</span></button>
       <div class="timer" id="game-timer">60:00</div>
@@ -85,10 +85,16 @@
           <button class="order-tab sell" data-side="sell">Vendre</button>
         </div>
 
-        <!-- Market / Limit -->
+        <!-- Market / Limit / Stop -->
         <div class="order-type-tabs">
           <button class="order-type-tab active" data-type="market">Au marché</button>
           <button class="order-type-tab" data-type="limit">Cours limité</button>
+          <button class="order-type-tab" data-type="stop">Stop Loss</button>
+        </div>
+
+        <!-- Info stop loss -->
+        <div id="stop-loss-info" class="stop-loss-info hidden">
+          🛡️ Vend automatiquement si le cours descend sous le prix stop.
         </div>
 
         <div class="order-form">
@@ -108,6 +114,11 @@
           <div class="form-group" id="limit-price-group" style="display:none;">
             <label>Prix limite (€)</label>
             <input type="number" id="order-limit-price" min="0.01" step="0.01" placeholder="Prix souhaité">
+          </div>
+
+          <div class="form-group" id="stop-price-group" style="display:none;">
+            <label>Prix stop (€) <span class="text-muted" style="font-size:0.75rem;">— déclenche la vente si ≤</span></label>
+            <input type="number" id="order-stop-price" min="0.01" step="0.01" placeholder="Prix de déclenchement">
           </div>
 
           <div class="order-summary">

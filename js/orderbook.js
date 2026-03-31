@@ -100,6 +100,22 @@ const OrderBook = (() => {
     return order;
   }
 
+  function placeStopOrder(symbol, quantity, stopPrice) {
+    if (!Market.isOpen()) return null;
+    const order = {
+      id: Date.now() + Math.random(),
+      symbol,
+      side: 'sell', // Stop loss = toujours une vente
+      type: 'stop',
+      quantity,
+      stopPrice: +stopPrice,
+      time: Date.now(),
+      status: 'pending',
+    };
+    pendingOrders.push(order);
+    return order;
+  }
+
   function checkPendingOrders() {
     const executed = [];
 
@@ -110,7 +126,13 @@ const OrderBook = (() => {
       let shouldExecute = false;
       let execPrice = 0;
 
-      if (order.side === 'buy' && p.ask <= order.limitPrice) {
+      if (order.type === 'stop') {
+        // Stop loss : déclenche si le bid descend sous le prix stop
+        if (p.bid <= order.stopPrice) {
+          shouldExecute = true;
+          execPrice = p.bid; // Exécuté au marché (bid)
+        }
+      } else if (order.side === 'buy' && p.ask <= order.limitPrice) {
         shouldExecute = true;
         execPrice = p.ask;
       } else if (order.side === 'sell' && p.bid >= order.limitPrice) {
@@ -121,8 +143,8 @@ const OrderBook = (() => {
       if (shouldExecute) {
         const result = {
           symbol: order.symbol,
-          side: order.side,
-          type: 'limit',
+          side: 'sell',
+          type: order.type,
           price: execPrice,
           quantity: order.quantity,
           total: +(execPrice * order.quantity).toFixed(2),
@@ -130,7 +152,7 @@ const OrderBook = (() => {
           orderId: order.id,
         };
         executed.push(result);
-        return false; // Retirer de la liste
+        return false;
       }
       return true;
     });
@@ -159,6 +181,7 @@ const OrderBook = (() => {
     render,
     executeMarketOrder,
     placeLimitOrder,
+    placeStopOrder,
     checkPendingOrders,
     getPendingOrders,
     cancelOrder,
