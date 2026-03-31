@@ -91,10 +91,12 @@ const Market = (() => {
       const pe = parseFloat(stock.fundamentals.pe);
       const divYield = parseFloat(stock.fundamentals.dividend);
       // Score fondamental : PE bas + dividende haut = favorable
-      const fundScore = (20 - pe) / 100 + divYield / 200;
+      // Borné entre -0.001 et +0.001 pour éviter les explosions de prix
+      const rawScore = (20 - pe) / 10000 + divYield / 20000;
+      const fundScore = Math.max(-0.001, Math.min(0.001, rawScore));
 
       trends[stock.symbol] = {
-        direction: fundScore + (Math.random() - 0.5) * 0.003, // drift basé sur fondamentaux + aléa
+        direction: fundScore + (Math.random() - 0.5) * 0.0003, // drift très léger
         momentum: 0,       // momentum accumulé (mean-reversion)
         sentiment: 0,       // sentiment de marché (-1 à +1)
       };
@@ -113,8 +115,9 @@ const Market = (() => {
         // Le sentiment évolue graduellement (pas de saut brutal)
         t.sentiment += (Math.random() - 0.5) * 0.4;
         t.sentiment = Math.max(-1, Math.min(1, t.sentiment));
-        // La direction ajuste légèrement
-        t.direction += (Math.random() - 0.5) * 0.002;
+        // La direction ajuste légèrement, bornée pour éviter les explosions
+        t.direction += (Math.random() - 0.5) * 0.0002;
+        t.direction = Math.max(-0.002, Math.min(0.002, t.direction));
       });
     }
 
@@ -122,27 +125,30 @@ const Market = (() => {
       const p = prices[stock.symbol];
       const t = trends[stock.symbol];
 
-      // 1. Tendance de fond (fondamentaux)
-      const trendComponent = t.direction * 0.3;
+      // 1. Tendance de fond (fondamentaux) — très léger
+      const trendComponent = t.direction * 0.1;
 
       // 2. Momentum : si l'action monte depuis un moment, elle a tendance à continuer
       //    mais avec mean-reversion (retour vers le prix d'ouverture)
       const deviation = (p.current - p.open) / p.open;
-      const meanReversion = -deviation * 0.02; // force de rappel
+      const meanReversion = -deviation * 0.05; // force de rappel renforcée
       t.momentum = t.momentum * 0.8 + (p.changePct / 100) * 0.2; // momentum lissé
-      const momentumComponent = t.momentum * 0.1;
+      t.momentum = Math.max(-0.01, Math.min(0.01, t.momentum)); // borner le momentum
+      const momentumComponent = t.momentum * 0.05;
 
       // 3. Sentiment de marché
-      const sentimentComponent = t.sentiment * stock.volatility * 0.3;
+      const sentimentComponent = t.sentiment * stock.volatility * 0.2;
 
       // 4. Bruit aléatoire (toujours présent mais réduit)
-      const noise = gaussianRandom() * stock.volatility * 0.6;
+      const noise = gaussianRandom() * stock.volatility * 0.5;
 
-      // Combinaison
-      const returnRate = trendComponent + momentumComponent + sentimentComponent + meanReversion + noise;
+      // Combinaison — bornée à ±3% max par tick
+      let returnRate = trendComponent + momentumComponent + sentimentComponent + meanReversion + noise;
+      returnRate = Math.max(-0.03, Math.min(0.03, returnRate));
 
       p.current = +(p.current * (1 + returnRate)).toFixed(2);
-      p.current = Math.max(p.current, 0.01);
+      // Borner le prix entre 50% et 200% du prix d'ouverture
+      p.current = Math.max(p.open * 0.5, Math.min(p.open * 2, p.current));
 
       // Mise à jour high/low
       p.high = Math.max(p.high, p.current);
