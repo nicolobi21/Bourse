@@ -19,6 +19,7 @@
     <div class="player-info">
       <span id="header-player-name" class="text-muted"></span>
       <span>Portefeuille: <strong id="header-total-value">10 000,00€</strong></span>
+      <span>Cash: <strong id="header-cash">10 000,00€</strong></span>
       <span id="header-pnl" class="text-green">+0.00%</span>
       <button class="achievements-btn" onclick="App.toggleAchievements()">🏆 <span id="achievements-count">0/12</span></button>
       <div class="timer" id="game-timer">60:00</div>
@@ -55,6 +56,12 @@
           </div>
           <div class="chart-detail" id="chart-detail"></div>
         </div>
+      </div>
+      <div class="chart-timeframes">
+        <button class="tf-btn" data-tf="60">1 min</button>
+        <button class="tf-btn" data-tf="300">5 min</button>
+        <button class="tf-btn" data-tf="900">15 min</button>
+        <button class="tf-btn active" data-tf="0">Tout</button>
       </div>
       <div class="chart-container">
         <canvas id="price-chart"></canvas>
@@ -173,6 +180,18 @@
           </thead>
           <tbody id="history-tbody">
             <tr><td colspan="5" class="text-muted text-center">Aucune transaction</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="portfolio-section">
+        <div class="panel-title">🏆 Classement en direct</div>
+        <table class="leaderboard-live-table">
+          <thead>
+            <tr><th style="width:40px;">#</th><th>Joueur</th><th style="text-align:right;">Portefeuille</th><th style="text-align:right;">Perf</th></tr>
+          </thead>
+          <tbody id="live-leaderboard-tbody">
+            <tr><td colspan="4" class="text-muted text-center">En attente des joueurs...</td></tr>
           </tbody>
         </table>
       </div>
