@@ -12,13 +12,13 @@
 const Sync = (() => {
   // === REMPLACER AVEC VOTRE CONFIGURATION FIREBASE ===
   const FIREBASE_CONFIG = {
-    apiKey: "",
-    authDomain: "",
-    databaseURL: "",
-    projectId: "",
-    storageBucket: "",
-    messagingSenderId: "",
-    appId: "",
+    apiKey: "AIzaSyCfX5QAr1-YluCcpKw1Ja0i9XluRHiVzJ4",
+    authDomain: "bourse-2ba52.firebaseapp.com",
+    databaseURL: "https://bourse-2ba52-default-rtdb.europe-west1.firebasedatabase.app",
+    projectId: "bourse-2ba52",
+    storageBucket: "bourse-2ba52.firebasestorage.app",
+    messagingSenderId: "376332520419",
+    appId: "1:376332520419:web:210d9524fbb503eef52ed6",
   };
 
   let db = null;
