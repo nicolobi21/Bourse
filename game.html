@@ -18,6 +18,7 @@
     <div class="logo">📊 BEL Bourse</div>
     <div class="player-info">
       <span id="header-player-name" class="text-muted"></span>
+      <span id="bel-index" class="bel-index">BEL7: —</span>
       <span>Valeur totale: <strong id="header-total-value">10 000,00€</strong></span>
       <span>💵 Cash dispo: <strong id="header-cash">10 000,00€</strong></span>
       <span id="header-pnl" class="text-green">+0.00%</span>
@@ -75,6 +76,7 @@
         <button class="right-tab active" data-rtab="order">💱 Ordres</button>
         <button class="right-tab" data-rtab="calendar">📅 Agenda</button>
         <button class="right-tab" data-rtab="news">📰 Actus</button>
+        <button class="right-tab" data-rtab="lexique">📚 Lexique</button>
       </div>
 
       <!-- TAB: Orders -->
@@ -137,6 +139,31 @@
 
           <button class="btn-order buy" id="btn-submit-order" disabled>ACHETER</button>
         </div>
+
+        <!-- Price Alerts -->
+        <div class="alerts-section">
+          <div class="panel-title" style="margin-top:1rem;">🔔 Alertes de prix</div>
+          <div class="alert-form">
+            <select id="alert-symbol" class="alert-select">
+              <option value="ABI">ABI</option>
+              <option value="UCB">UCB</option>
+              <option value="PROX">PROX</option>
+              <option value="SOLV">SOLV</option>
+              <option value="COLR">COLR</option>
+              <option value="AGS">AGS</option>
+              <option value="BEKB">BEKB</option>
+            </select>
+            <select id="alert-condition" class="alert-select">
+              <option value="above">≥</option>
+              <option value="below">≤</option>
+            </select>
+            <input type="number" id="alert-price" class="alert-input" min="0.01" step="0.01" placeholder="Prix €">
+            <button id="btn-add-alert" class="alert-add-btn">+</button>
+          </div>
+          <div id="alerts-list" class="alerts-list">
+            <span class="text-muted" style="font-size:0.8rem;">Aucune alerte</span>
+          </div>
+        </div>
       </div>
 
       <!-- TAB: Calendar -->
@@ -154,6 +181,28 @@
         <p class="text-muted" style="font-size:0.8rem; margin-bottom:0.75rem;">Flash infos et résultats des événements du calendrier.</p>
         <div id="news-feed" class="news-feed news-feed-full">
           <div class="text-muted" style="font-size:0.8rem;">Les flash infos apparaîtront ici...</div>
+        </div>
+      </div>
+
+      <!-- TAB: Lexique -->
+      <div class="right-tab-content" id="rtab-lexique">
+        <div class="panel-title">📚 Lexique financier</div>
+        <div class="glossary-list">
+          <div class="glossary-item"><span class="glossary-term">Action</span><span class="glossary-def">Titre représentant une part de propriété dans une entreprise. Donne droit aux bénéfices (dividendes) et au vote en assemblée.</span></div>
+          <div class="glossary-item"><span class="glossary-term">Bid / Ask</span><span class="glossary-def">Bid = prix auquel le marché achète (tu vends). Ask = prix auquel le marché vend (tu achètes). L'écart entre les deux est le spread.</span></div>
+          <div class="glossary-item"><span class="glossary-term">Spread</span><span class="glossary-def">Différence entre le prix Ask et le prix Bid. Représente le coût implicite d'une transaction. Plus il est faible, meilleure est la liquidité.</span></div>
+          <div class="glossary-item"><span class="glossary-term">Ordre au marché</span><span class="glossary-def">Ordre exécuté immédiatement au meilleur prix disponible. Rapide mais sans garantie de prix exact.</span></div>
+          <div class="glossary-item"><span class="glossary-term">Ordre à cours limité</span><span class="glossary-def">Tu fixes un prix maximal (achat) ou minimal (vente). L'ordre n'est exécuté que si le marché atteint ton prix.</span></div>
+          <div class="glossary-item"><span class="glossary-term">Stop Loss</span><span class="glossary-def">Ordre de vente automatique déclenché quand le cours descend sous un seuil défini. Protège contre les pertes importantes.</span></div>
+          <div class="glossary-item"><span class="glossary-term">PnL latent</span><span class="glossary-def">Profit ou perte sur les positions encore ouvertes (non vendues). Devient réalisé quand tu vends.</span></div>
+          <div class="glossary-item"><span class="glossary-term">PnL réalisé</span><span class="glossary-def">Profit ou perte effectivement encaissé après la clôture d'une position (vente de l'action achetée).</span></div>
+          <div class="glossary-item"><span class="glossary-term">PRU (Prix de Revient Unitaire)</span><span class="glossary-def">Prix moyen d'achat de tes actions. Si tu achètes plusieurs fois, le PRU est recalculé à la moyenne pondérée.</span></div>
+          <div class="glossary-item"><span class="glossary-term">Dividende</span><span class="glossary-def">Part des bénéfices distribués aux actionnaires. Versé trimestriellement dans ce jeu, proportionnel au nombre d'actions détenues.</span></div>
+          <div class="glossary-item"><span class="glossary-term">Carnet de cotation</span><span class="glossary-def">Affiche les meilleures offres d'achat (Bid) et de vente (Ask) avec les volumes associés. Montre la liquidité du marché.</span></div>
+          <div class="glossary-item"><span class="glossary-term">Chandelier japonais</span><span class="glossary-def">Représentation graphique d'une séance : corps (ouverture → clôture) et mèches (plus bas / plus haut). Vert = hausse, rouge = baisse.</span></div>
+          <div class="glossary-item"><span class="glossary-term">Volatilité</span><span class="glossary-def">Mesure de l'amplitude des variations de prix. Une action volatile fluctue beaucoup — risque élevé, opportunités importantes.</span></div>
+          <div class="glossary-item"><span class="glossary-term">Indice BEL7</span><span class="glossary-def">Indice synthétique calculant la variation moyenne des 7 actions du jeu. Indique la tendance générale du marché.</span></div>
+          <div class="glossary-item"><span class="glossary-term">Diversification</span><span class="glossary-def">Répartir ses investissements sur plusieurs actions ou secteurs pour réduire le risque global du portefeuille.</span></div>
         </div>
       </div>
     </div>
@@ -184,7 +233,10 @@
       </div>
 
       <div class="portfolio-section">
-        <div class="panel-title">Historique des transactions</div>
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div class="panel-title">Historique des transactions</div>
+          <button onclick="App.exportCSV()" class="btn-export-csv" title="Exporter en CSV">⬇️ CSV</button>
+        </div>
         <table class="history-table">
           <thead>
             <tr><th>Heure</th><th>Type</th><th>Action</th><th>Détail</th><th>Total</th></tr>

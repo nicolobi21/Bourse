@@ -25,6 +25,7 @@ const App = (() => {
 
     // Init modules
     Market.init();
+    OrderBook.init();
     Charts.init('price-chart', 'ABI');
 
     // Note: Sync.init() est déjà appelé dans bootGame() avant initGame()
@@ -125,6 +126,14 @@ const App = (() => {
     // Init portfolio mini-chart
     initPortfolioChart();
 
+    // Dividend and weekend notifications
+    setupDividendNotification();
+    setupWeekendNotification();
+
+    // Price alerts
+    loadPriceAlerts();
+    setupAlertForm();
+
     // Setup tabs, timeframes, leaderboard, and mobile nav
     setupRightPanelTabs();
     setupTimeframeButtons();
@@ -202,6 +211,8 @@ const App = (() => {
     updateTicker();
     updateHeaderValue();
     updateOrderPanel();
+    updateBELIndex();
+    checkPriceAlerts();
   }
 
   function updateStockList() {
@@ -375,11 +386,21 @@ const App = (() => {
 
     // Dernières 20 transactions
     tbody.innerHTML = history.slice(-20).reverse().map(t => {
-      // Afficher le temps écoulé depuis le début du jeu (T+mm:ss)
       const elapsed = Math.max(0, t.time - gameStartTime);
       const mins = Math.floor(elapsed / 60000);
       const secs = Math.floor((elapsed % 60000) / 1000);
       const timeStr = 'T+' + mins.toString().padStart(2, '0') + ':' + secs.toString().padStart(2, '0');
+
+      if (t.type === 'dividende') {
+        return `<tr>
+          <td>${timeStr}</td>
+          <td class="text-green" style="font-size:0.75rem;">💰 DIV</td>
+          <td>${t.symbol}</td>
+          <td>—</td>
+          <td class="text-green">+${t.total.toFixed(2)}€</td>
+        </tr>`;
+      }
+
       const sideClass = t.side === 'buy' ? 'text-green' : 'text-red';
       const sideText = t.side === 'buy' ? 'ACHAT' : 'VENTE';
 
@@ -1237,6 +1258,154 @@ const App = (() => {
     }).join('');
   }
 
+  // ==================== BEL COMPOSITE INDEX ====================
+  function updateBELIndex() {
+    const el = document.getElementById('bel-index');
+    if (!el) return;
+    const stocks = Market.getStocks();
+    const changes = stocks.map(s => {
+      const p = Market.getPrice(s.symbol);
+      return p ? p.changePct : 0;
+    });
+    const avg = changes.reduce((a, b) => a + b, 0) / changes.length;
+    el.textContent = `BEL7: ${avg >= 0 ? '+' : ''}${avg.toFixed(2)}%`;
+    el.className = 'bel-index ' + (avg >= 0 ? 'up' : 'down');
+  }
+
+  // ==================== EXPORT CSV ====================
+  function exportCSV() {
+    const history = Portfolio.getHistory();
+    if (history.length === 0) {
+      showToast('Aucune transaction à exporter', 'error');
+      return;
+    }
+
+    const MONTHS_FR = ['Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov','Déc'];
+    const rows = [['Date/Heure', 'Type', 'Action', 'Quantité', 'Prix unitaire', 'Total']];
+
+    history.forEach(t => {
+      const d = new Date(t.time);
+      const dateStr = `${d.getDate()} ${MONTHS_FR[d.getMonth()]} ${d.getFullYear()} ${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`;
+      if (t.type === 'dividende') {
+        rows.push([dateStr, 'Dividende', t.symbol, '', '', t.total.toFixed(2)]);
+      } else {
+        rows.push([dateStr, t.side === 'buy' ? 'Achat' : 'Vente', t.symbol, t.quantity, t.price.toFixed(2), t.total.toFixed(2)]);
+      }
+    });
+
+    const csv = '\uFEFF' + rows.map(r => r.map(v => `"${v}"`).join(';')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'bel_bourse_transactions.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('Export CSV téléchargé !', 'success');
+  }
+
+  // ==================== PRICE ALERTS ====================
+  let priceAlerts = []; // { symbol, condition: 'above'|'below', targetPrice, triggered: false }
+  let alertsFired = new Set();
+
+  function loadPriceAlerts() {
+    const roomCode = localStorage.getItem('bourse_room') || 'solo';
+    try {
+      const raw = localStorage.getItem('bourse_alerts_' + roomCode);
+      if (raw) priceAlerts = JSON.parse(raw) || [];
+    } catch(e) { priceAlerts = []; }
+    renderAlerts();
+  }
+
+  function savePriceAlerts() {
+    const roomCode = localStorage.getItem('bourse_room') || 'solo';
+    try { localStorage.setItem('bourse_alerts_' + roomCode, JSON.stringify(priceAlerts)); } catch(e) {}
+  }
+
+  function setupAlertForm() {
+    const btn = document.getElementById('btn-add-alert');
+    if (btn) btn.addEventListener('click', addAlert);
+  }
+
+  function addAlert() {
+    const symbolEl = document.getElementById('alert-symbol');
+    const priceEl = document.getElementById('alert-price');
+    const condEl = document.getElementById('alert-condition');
+    if (!symbolEl || !priceEl || !condEl) return;
+
+    const symbol = symbolEl.value;
+    const targetPrice = parseFloat(priceEl.value);
+    const condition = condEl.value;
+    if (!symbol || isNaN(targetPrice) || targetPrice <= 0) {
+      showToast('Remplis tous les champs d\'alerte', 'error');
+      return;
+    }
+
+    priceAlerts.push({ id: Date.now(), symbol, condition, targetPrice });
+    savePriceAlerts();
+    renderAlerts();
+    priceEl.value = '';
+    showToast(`Alerte créée : ${symbol} ${condition === 'above' ? '≥' : '≤'} ${targetPrice.toFixed(2)}€`, 'success');
+  }
+
+  function removeAlert(id) {
+    priceAlerts = priceAlerts.filter(a => a.id !== id);
+    alertsFired.delete(id);
+    savePriceAlerts();
+    renderAlerts();
+  }
+
+  function checkPriceAlerts() {
+    priceAlerts.forEach(alert => {
+      if (alertsFired.has(alert.id)) return;
+      const p = Market.getPrice(alert.symbol);
+      if (!p) return;
+      const triggered = (alert.condition === 'above' && p.current >= alert.targetPrice)
+        || (alert.condition === 'below' && p.current <= alert.targetPrice);
+      if (triggered) {
+        alertsFired.add(alert.id);
+        const cond = alert.condition === 'above' ? '≥' : '≤';
+        showToast(`🔔 Alerte : ${alert.symbol} ${cond} ${alert.targetPrice.toFixed(2)}€ (cours: ${p.current.toFixed(2)}€)`, 'success');
+      }
+    });
+  }
+
+  function renderAlerts() {
+    const container = document.getElementById('alerts-list');
+    if (!container) return;
+    if (priceAlerts.length === 0) {
+      container.innerHTML = '<span class="text-muted" style="font-size:0.8rem;">Aucune alerte</span>';
+      return;
+    }
+    container.innerHTML = priceAlerts.map(a => {
+      const fired = alertsFired.has(a.id);
+      const cond = a.condition === 'above' ? '≥' : '≤';
+      return `<div class="alert-item ${fired ? 'alert-fired' : ''}">
+        <span>${a.symbol} ${cond} ${a.targetPrice.toFixed(2)}€ ${fired ? '✅' : ''}</span>
+        <button onclick="App.removeAlert(${a.id})" class="alert-del-btn">✕</button>
+      </div>`;
+    }).join('');
+  }
+
+  // ==================== DIVIDEND NOTIFICATION ====================
+  function setupDividendNotification() {
+    Market.onDividend(payments => {
+      const total = payments.reduce((s, p) => s + p.amount, 0);
+      const names = payments.map(p => `${p.symbol} +${p.amount.toFixed(2)}€`).join(', ');
+      showToast(`💰 Dividendes reçus : ${names} (total: +${total.toFixed(2)}€)`, 'success');
+    });
+  }
+
+  // ==================== WEEKEND NOTIFICATION ====================
+  function setupWeekendNotification() {
+    Market.onWeekend(mondayDate => {
+      const MONTHS_FR = ['Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov','Déc'];
+      const d = new Date(mondayDate);
+      const label = `${d.getUTCDate()} ${MONTHS_FR[d.getUTCMonth()]}`;
+      showToast(`📆 Week-end écoulé — Lundi ${label}`, 'success');
+    });
+  }
+
   // ==================== MOBILE NAV ====================
   function setupMobileNav() {
     const nav = document.getElementById('mobile-nav');
@@ -1267,5 +1436,7 @@ const App = (() => {
     showToast,
     playSound,
     toggleAchievements,
+    exportCSV,
+    removeAlert,
   };
 })();

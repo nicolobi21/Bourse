@@ -1481,3 +1481,138 @@ body {
 .text-center { text-align: center; }
 .font-mono { font-variant-numeric: tabular-nums; }
 .hidden { display: none !important; }
+
+/* ========== BEL7 INDEX ========== */
+.bel-index {
+  font-size: 0.8rem;
+  font-weight: 700;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid var(--border);
+  letter-spacing: 0.02em;
+}
+.bel-index.up   { color: var(--green); }
+.bel-index.down { color: var(--red); }
+
+/* ========== GLOSSARY (LEXIQUE) ========== */
+.glossary-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  overflow-y: auto;
+  max-height: calc(100vh - 200px);
+}
+
+.glossary-item {
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.glossary-term {
+  font-weight: 700;
+  font-size: 0.8rem;
+  color: #60a5fa;
+}
+
+.glossary-def {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+/* ========== PRICE ALERTS ========== */
+.alerts-section {
+  margin-top: 0.25rem;
+}
+
+.alert-form {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  margin-bottom: 0.4rem;
+}
+
+.alert-select {
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.25rem 0.3rem;
+  font-size: 0.75rem;
+  flex-shrink: 0;
+}
+
+.alert-input {
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.25rem 0.4rem;
+  font-size: 0.75rem;
+  width: 70px;
+  min-width: 0;
+}
+
+.alert-add-btn {
+  background: var(--green);
+  color: #000;
+  border: none;
+  border-radius: 4px;
+  padding: 0.25rem 0.6rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.alerts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.alert-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.78rem;
+  padding: 0.2rem 0.35rem;
+  background: rgba(255,255,255,0.04);
+  border-radius: 4px;
+  border-left: 2px solid var(--blue);
+}
+
+.alert-item.alert-fired {
+  opacity: 0.5;
+  border-left-color: var(--green);
+}
+
+.alert-del-btn {
+  background: none;
+  border: none;
+  color: var(--red);
+  cursor: pointer;
+  font-size: 0.75rem;
+  padding: 0 0.2rem;
+  line-height: 1;
+}
+
+/* ========== EXPORT CSV BUTTON ========== */
+.btn-export-csv {
+  background: rgba(59,130,246,0.15);
+  color: #60a5fa;
+  border: 1px solid rgba(59,130,246,0.3);
+  border-radius: 4px;
+  padding: 0.2rem 0.5rem;
+  font-size: 0.75rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn-export-csv:hover {
+  background: rgba(59,130,246,0.25);
+}

@@ -163,6 +163,22 @@ const Portfolio = (() => {
     listeners.forEach(fn => fn());
   }
 
+  function receiveDividend(symbol, cashAmount) {
+    if (!cashAmount || cashAmount <= 0) return;
+    cash = +(cash + cashAmount).toFixed(2);
+    history.push({
+      symbol,
+      side: 'dividende',
+      type: 'dividende',
+      price: 0,
+      quantity: 0,
+      total: cashAmount,
+      time: Date.now(),
+    });
+    save();
+    notifyListeners();
+  }
+
   function getInitialCapital() { return INITIAL_CAPITAL; }
 
   return {
@@ -179,6 +195,7 @@ const Portfolio = (() => {
     getPerformancePct,
     getValueHistory,
     recordValue,
+    receiveDividend,
     onUpdate,
     isInitialized,
   };

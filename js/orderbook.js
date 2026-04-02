@@ -7,6 +7,27 @@ const OrderBook = (() => {
   let pendingOrders = []; // Ordres à cours limité en attente
   let onOrderExecuted = null;
 
+  function init() { restore(); }
+
+  function save() {
+    const roomCode = localStorage.getItem('bourse_room') || 'solo';
+    try { localStorage.setItem('bourse_orders_' + roomCode, JSON.stringify(pendingOrders)); } catch(e) {}
+  }
+
+  function restore() {
+    const roomCode = localStorage.getItem('bourse_room') || 'solo';
+    try {
+      const raw = localStorage.getItem('bourse_orders_' + roomCode);
+      if (raw) pendingOrders = JSON.parse(raw) || [];
+    } catch(e) { pendingOrders = []; }
+  }
+
+  function clearSave() {
+    const roomCode = localStorage.getItem('bourse_room') || 'solo';
+    localStorage.removeItem('bourse_orders_' + roomCode);
+    pendingOrders = [];
+  }
+
   function generateLevels(symbol) {
     const p = Market.getPrice(symbol);
     if (!p) return { asks: [], bids: [], spread: 0 };
@@ -97,6 +118,7 @@ const OrderBook = (() => {
     };
 
     pendingOrders.push(order);
+    save();
     return order;
   }
 
@@ -113,6 +135,7 @@ const OrderBook = (() => {
       status: 'pending',
     };
     pendingOrders.push(order);
+    save();
     return order;
   }
 
@@ -157,8 +180,9 @@ const OrderBook = (() => {
       return true;
     });
 
-    if (executed.length > 0 && onOrderExecuted) {
-      executed.forEach(e => onOrderExecuted(e));
+    if (executed.length > 0) {
+      save();
+      if (onOrderExecuted) executed.forEach(e => onOrderExecuted(e));
     }
 
     return executed;
@@ -170,6 +194,7 @@ const OrderBook = (() => {
 
   function cancelOrder(orderId) {
     pendingOrders = pendingOrders.filter(o => o.id !== orderId);
+    save();
   }
 
   function setOnOrderExecuted(fn) {
@@ -177,6 +202,7 @@ const OrderBook = (() => {
   }
 
   return {
+    init,
     generateLevels,
     render,
     executeMarketOrder,
@@ -186,5 +212,6 @@ const OrderBook = (() => {
     getPendingOrders,
     cancelOrder,
     setOnOrderExecuted,
+    clearSave,
   };
 })();

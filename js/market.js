@@ -46,6 +46,12 @@ const Market = (() => {
     },
   ];
 
+  // Taux de dividende annuels (reflètent les fundamentals)
+  const DIVIDEND_RATES = {
+    ABI: 0.015, UCB: 0.012, PROX: 0.048, SOLV: 0.035,
+    COLR: 0.021, AGS: 0.052, BEKB: 0.028,
+  };
+
   // Paramètres historiques réalistes par action
   const STOCK_PARAMS = {
     ABI:  { annualDrift: -0.02, annualVol: 0.20 },
@@ -62,10 +68,13 @@ const Market = (() => {
   let preGameHistory = {};     // 252 jours ouvrables pré-jeu (déterministe)
   let currentGameDate = GAME_VIRTUAL_START;
   let listeners = [];
+  let dividendListeners = [];
+  let weekendListeners = [];
   let intervalId = null;
   let marketOpen = false;
   let trends = {};
   let trendChangeCounter = 0;
+  let dividendTickCounter = 0; // Compteur pour versements trimestriels (63 ticks)
 
   // === Générateur aléatoire déterministe (LCG) ===
   function lcgRandom(seed) {
@@ -176,7 +185,8 @@ const Market = (() => {
     try {
       // preGameHistory est déterministe, inutile de le sauvegarder
       localStorage.setItem('bourse_market_' + roomCode, JSON.stringify({
-        prices, priceHistory, currentGameDate, trends, trendChangeCounter
+        prices, priceHistory, currentGameDate, trends, trendChangeCounter, dividendTickCounter,
+        _version: 2, // invalide les vieilles sauvegardes sans OHLC
       }));
     } catch (e) {
       // localStorage plein : on ignore
@@ -190,6 +200,11 @@ const Market = (() => {
     try {
       const data = JSON.parse(raw);
       if (!data.prices || Object.keys(data.prices).length !== STOCKS.length) return false;
+      // Invalider les vieilles sauvegardes sans OHLC (version < 2)
+      if (data._version !== 2) {
+        localStorage.removeItem('bourse_market_' + roomCode);
+        return false;
+      }
 
       STOCKS.forEach(stock => {
         if (data.prices[stock.symbol]) {
@@ -202,6 +217,7 @@ const Market = (() => {
       currentGameDate = data.currentGameDate || GAME_VIRTUAL_START;
       trends = data.trends || {};
       trendChangeCounter = data.trendChangeCounter || 0;
+      dividendTickCounter = data.dividendTickCounter || 0;
 
       // Régénérer l'historique pré-jeu (déterministe, pas besoin de le persister)
       STOCKS.forEach(stock => {
@@ -280,7 +296,20 @@ const Market = (() => {
     if (!marketOpen) return;
 
     // Avancer la date virtuelle d'un jour ouvrable (10 secondes = 1 jour)
+    const prevGameDate = currentGameDate;
     currentGameDate = nextBusinessDay(currentGameDate);
+
+    // Détecter le passage d'un week-end (vendredi → lundi)
+    if (new Date(prevGameDate).getUTCDay() === 5 && new Date(currentGameDate).getUTCDay() === 1) {
+      weekendListeners.forEach(fn => fn(currentGameDate));
+    }
+
+    // Dividendes trimestriels (tous les 63 ticks ≈ 1 trimestre virtuel)
+    dividendTickCounter++;
+    if (dividendTickCounter >= 63) {
+      dividendTickCounter = 0;
+      payDividends();
+    }
 
     trendChangeCounter++;
     if (trendChangeCounter >= 30) {
@@ -427,6 +456,34 @@ const Market = (() => {
     listeners = [];
   }
 
+  /**
+   * Verse les dividendes trimestriels à tous les joueurs ayant des positions.
+   * Montant = cours actuel × taux_annuel / 4 × quantité.
+   */
+  function payDividends() {
+    if (typeof Portfolio === 'undefined') return;
+    const positions = Portfolio.getPositions();
+    const payments = [];
+    STOCKS.forEach(stock => {
+      const pos = positions[stock.symbol];
+      if (!pos || pos.quantity <= 0) return;
+      const p = prices[stock.symbol];
+      if (!p) return;
+      const annualRate = DIVIDEND_RATES[stock.symbol] || 0;
+      const amount = +(p.current * annualRate / 4 * pos.quantity).toFixed(2);
+      if (amount > 0) {
+        Portfolio.receiveDividend(stock.symbol, amount);
+        payments.push({ symbol: stock.symbol, name: stock.name, amount });
+      }
+    });
+    if (payments.length > 0) {
+      dividendListeners.forEach(fn => fn(payments));
+    }
+  }
+
+  function onDividend(fn)  { dividendListeners.push(fn); }
+  function onWeekend(fn)   { weekendListeners.push(fn); }
+
   function clearSave() {
     const roomCode = localStorage.getItem('bourse_room') || 'solo';
     localStorage.removeItem('bourse_market_' + roomCode);
@@ -436,6 +493,7 @@ const Market = (() => {
     currentGameDate = GAME_VIRTUAL_START;
     trends = {};
     trendChangeCounter = 0;
+    dividendTickCounter = 0;
   }
 
   function notifyListeners() {
@@ -454,7 +512,8 @@ const Market = (() => {
     getPrice, getAllPrices, getHistory,
     getStocks, isOpen,
     applyShock,
-    onUpdate, clearListeners, clearSave,
+    onUpdate, onDividend, onWeekend,
+    clearListeners, clearSave,
     getCurrentGameDate,
   };
 })();
