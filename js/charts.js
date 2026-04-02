@@ -32,6 +32,7 @@ const Charts = (() => {
             data: [],
             backgroundColor: [],
             borderColor:  'transparent',
+            borderWidth: 0,
             barPercentage: 0.12,
             categoryPercentage: 1.0,
             order: 2,
@@ -42,6 +43,7 @@ const Charts = (() => {
             data: [],
             backgroundColor: [],
             borderColor: 'transparent',
+            borderWidth: 0,
             barPercentage: 0.55,
             categoryPercentage: 0.85,
             order: 1,
@@ -176,6 +178,16 @@ const Charts = (() => {
 
     chart.data.datasets[2].data = buyPoints;
     chart.data.datasets[3].data = sellPoints;
+
+    // Axe Y : borner sur la plage visible (évite l'axe partant de 0)
+    const allVals = history.flatMap(h => [h.low ?? h.price, h.high ?? h.price]);
+    if (allVals.length > 0) {
+      const dataMin = Math.min(...allVals);
+      const dataMax = Math.max(...allVals);
+      const pad = (dataMax - dataMin) * 0.08 || dataMin * 0.03;
+      chart.options.scales.y.min = Math.max(0, dataMin - pad);
+      chart.options.scales.y.max = dataMax + pad;
+    }
 
     chart.update('none');
   }
