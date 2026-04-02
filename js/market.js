@@ -132,13 +132,40 @@ const Market = (() => {
       dates.unshift(ts);
     }
 
-    // Construire la série de prix
+    // Volatilité intraday (pour les mèches des chandeliers)
+    const intradayVol = dailyVol * 0.5;
+
+    // Construire la série de prix avec OHLC
     const history = [];
     let cumLogReturn = 0;
+
     for (let i = 0; i < N; i++) {
-      const price = +(startPrice * Math.exp(cumLogReturn)).toFixed(2);
-      history.push({ time: dates[i], price: Math.max(0.01, price), gameDate: dates[i] });
+      // Avancer d'abord pour que history[N-1].close === basePrice
       cumLogReturn += logReturns[i];
+      const closePrice = Math.max(0.01, +(startPrice * Math.exp(cumLogReturn)).toFixed(2));
+      const openPrice = i === 0
+        ? +startPrice.toFixed(2)
+        : history[i - 1].close;
+
+      // Mèches intraday déterministes (suite du même RNG)
+      let u, v;
+      do { u = rng(); } while (u === 0);
+      do { v = rng(); } while (v === 0);
+      const z = Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+      const wick = Math.abs(z) * intradayVol;
+
+      const high  = +(Math.max(openPrice, closePrice) * (1 + wick)).toFixed(2);
+      const low   = +(Math.min(openPrice, closePrice) * Math.max(0.001, 1 - wick)).toFixed(2);
+
+      history.push({
+        time:     dates[i],
+        gameDate: dates[i],
+        price:    closePrice,  // alias close (compatibilité)
+        open:     openPrice,
+        high,
+        low,
+        close:    closePrice,
+      });
     }
 
     return history;
@@ -205,9 +232,13 @@ const Market = (() => {
         ask: stock.basePrice * (1 + 0.001),
       };
       priceHistory[stock.symbol] = [{
-        time: Date.now(),
-        price: stock.basePrice,
+        time:     Date.now(),
         gameDate: currentGameDate,
+        price:    stock.basePrice,
+        open:     stock.basePrice,
+        high:     stock.basePrice,
+        low:      stock.basePrice,
+        close:    stock.basePrice,
       }];
       preGameHistory[stock.symbol] = generatePreGameHistory(stock);
     });
@@ -266,6 +297,7 @@ const Market = (() => {
     STOCKS.forEach(stock => {
       const p = prices[stock.symbol];
       const t = trends[stock.symbol];
+      const tickOpen = p.current; // ouverture du jour = clôture précédente
 
       const trendComponent = t.direction * 0.1;
 
@@ -295,10 +327,19 @@ const Market = (() => {
       p.bid = +(p.current - halfSpread).toFixed(2);
       p.ask = +(p.current + halfSpread).toFixed(2);
 
+      // Mèches intraday simulées autour de la variation open→close
+      const wick = Math.abs(gaussianRandom()) * stock.volatility * 0.4;
+      const tickHigh = +(Math.max(tickOpen, p.current) * (1 + wick)).toFixed(2);
+      const tickLow  = +(Math.min(tickOpen, p.current) * Math.max(0.001, 1 - wick)).toFixed(2);
+
       priceHistory[stock.symbol].push({
-        time: Date.now(),
-        price: p.current,
+        time:     Date.now(),
         gameDate: currentGameDate,
+        price:    p.current,
+        open:     +tickOpen.toFixed(2),
+        high:     tickHigh,
+        low:      tickLow,
+        close:    p.current,
       });
       if (priceHistory[stock.symbol].length > 500) priceHistory[stock.symbol].shift();
     });
@@ -337,9 +378,13 @@ const Market = (() => {
     p.bid = +(p.current - halfSpread).toFixed(2);
     p.ask = +(p.current + halfSpread).toFixed(2);
     priceHistory[symbol].push({
-      time: Date.now(),
-      price: p.current,
+      time:     Date.now(),
       gameDate: currentGameDate,
+      price:    p.current,
+      open:     p.current,
+      high:     p.current,
+      low:      p.current,
+      close:    p.current,
     });
     if (priceHistory[symbol].length > 500) priceHistory[symbol].shift();
   }

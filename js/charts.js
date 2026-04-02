@@ -1,6 +1,7 @@
 /**
- * charts.js — Graphiques de cours en temps réel via Chart.js
- * Axe X en jours de trading virtuels (DD Mon en français)
+ * charts.js — Graphiques en chandeliers japonais via Chart.js
+ * Technique : barres flottantes [low,high] pour mèches + [open,close] pour corps
+ * Aucune dépendance supplémentaire requise.
  */
 
 const Charts = (() => {
@@ -8,7 +9,6 @@ const Charts = (() => {
 
   let chart = null;
   let currentSymbol = null;
-  let tradeMarkers = [];
   let timeframeDays = 90; // 0 = tout, 7 = 1 sem, 30 = 1 mois, 90 = 3 mois
 
   function formatDateLabel(ts) {
@@ -22,79 +22,94 @@ const Charts = (() => {
     if (!ctx) return;
 
     chart = new Chart(ctx, {
-      type: 'line',
+      type: 'bar',
       data: {
         labels: [],
         datasets: [
+          // Dataset 0 — Mèches (low → high), très fines
           {
-            label: 'Prix (€)',
+            label: 'Mèches',
             data: [],
-            borderColor: '#3b82f6',
-            backgroundColor: 'rgba(59, 130, 246, 0.05)',
-            borderWidth: 2,
-            fill: true,
-            tension: 0.3,
-            pointRadius: 0,
-            pointHitRadius: 10,
+            backgroundColor: [],
+            borderColor:  'transparent',
+            barPercentage: 0.12,
+            categoryPercentage: 1.0,
+            order: 2,
           },
+          // Dataset 1 — Corps (open → close)
           {
+            label: 'Corps',
+            data: [],
+            backgroundColor: [],
+            borderColor: 'transparent',
+            barPercentage: 0.55,
+            categoryPercentage: 0.85,
+            order: 1,
+          },
+          // Dataset 2 — Achats (scatter)
+          {
+            type: 'scatter',
             label: 'Achats',
             data: [],
-            borderColor: 'transparent',
             backgroundColor: '#10b981',
-            pointRadius: 6,
+            pointRadius: 7,
             pointStyle: 'triangle',
             showLine: false,
+            order: 0,
           },
+          // Dataset 3 — Ventes (scatter)
           {
+            type: 'scatter',
             label: 'Ventes',
             data: [],
-            borderColor: 'transparent',
             backgroundColor: '#ef4444',
-            pointRadius: 6,
+            pointRadius: 7,
             pointStyle: 'rectRot',
             showLine: false,
+            order: 0,
           },
         ],
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        animation: { duration: 300 },
-        interaction: {
-          intersect: false,
-          mode: 'index',
-        },
+        animation: { duration: 200 },
+        interaction: { intersect: false, mode: 'index' },
         plugins: {
           legend: { display: false },
           tooltip: {
             backgroundColor: '#1a2332',
-            borderColor: '#374151',
+            borderColor:     '#374151',
             borderWidth: 1,
-            titleColor: '#e5e7eb',
-            bodyColor: '#9ca3af',
+            titleColor:  '#e5e7eb',
+            bodyColor:   '#9ca3af',
+            filter: (item) => item.datasetIndex !== 0, // masquer la mèche dans le tooltip
             callbacks: {
               label: (ctx) => {
-                if (ctx.datasetIndex === 0) return `Prix: ${ctx.parsed.y.toFixed(2)}€`;
-                if (ctx.datasetIndex === 1) return `Achat: ${ctx.parsed.y.toFixed(2)}€`;
-                if (ctx.datasetIndex === 2) return `Vente: ${ctx.parsed.y.toFixed(2)}€`;
+                if (ctx.datasetIndex === 1) {
+                  const d = ctx.raw;
+                  if (!Array.isArray(d)) return null;
+                  const [a, b] = d;
+                  const open  = Math.min(a, b);
+                  const close = Math.max(a, b);
+                  return `O: ${open.toFixed(2)}€  F: ${close.toFixed(2)}€`;
+                }
+                if (ctx.datasetIndex === 2) return `Achat: ${ctx.parsed.y.toFixed(2)}€`;
+                if (ctx.datasetIndex === 3) return `Vente: ${ctx.parsed.y.toFixed(2)}€`;
               },
             },
           },
         },
         scales: {
           x: {
+            type: 'category',
             display: true,
-            grid: { color: 'rgba(255,255,255,0.05)' },
-            ticks: {
-              color: '#6b7280',
-              maxTicksLimit: 8,
-              font: { size: 10 },
-            },
+            grid: { color: 'rgba(255,255,255,0.04)' },
+            ticks: { color: '#6b7280', maxTicksLimit: 8, font: { size: 10 } },
           },
           y: {
             display: true,
-            grid: { color: 'rgba(255,255,255,0.05)' },
+            grid: { color: 'rgba(255,255,255,0.04)' },
             ticks: {
               color: '#6b7280',
               font: { size: 10 },
@@ -121,46 +136,46 @@ const Charts = (() => {
       history = history.slice(-timeframeDays);
     }
 
-    // Utiliser gameDate pour l'affichage, time pour le matching des trades
-    const labels = history.map(h => formatDateLabel(h.gameDate || h.time));
-    const data = history.map(h => h.price);
+    const GREEN      = 'rgba(16, 185, 129, 0.9)';
+    const RED        = 'rgba(239, 68, 68, 0.9)';
+    const GREEN_WICK = 'rgba(16, 185, 129, 0.6)';
+    const RED_WICK   = 'rgba(239, 68, 68, 0.6)';
 
-    chart.data.labels = labels;
-    chart.data.datasets[0].data = data;
+    const labels    = history.map(h => formatDateLabel(h.gameDate || h.time));
+    const wickData  = history.map(h => [h.low  ?? h.price, h.high ?? h.price]);
+    const bodyData  = history.map(h => [h.open ?? h.price, h.close ?? h.price]);
+    const bodyColors = history.map(h => (h.close ?? h.price) >= (h.open ?? h.price) ? GREEN : RED);
+    const wickColors = history.map(h => (h.close ?? h.price) >= (h.open ?? h.price) ? GREEN_WICK : RED_WICK);
 
-    // Couleur selon tendance
-    if (data.length >= 2) {
-      const isUp = data[data.length - 1] >= data[0];
-      chart.data.datasets[0].borderColor = isUp ? '#10b981' : '#ef4444';
-      chart.data.datasets[0].backgroundColor = isUp
-        ? 'rgba(16, 185, 129, 0.05)'
-        : 'rgba(239, 68, 68, 0.05)';
-    }
+    chart.data.labels                    = labels;
+    chart.data.datasets[0].data          = wickData;
+    chart.data.datasets[0].backgroundColor = wickColors;
+    chart.data.datasets[1].data          = bodyData;
+    chart.data.datasets[1].backgroundColor = bodyColors;
 
-    // Trade markers : match par timestamp réel (uniquement sur la partie live)
+    // Markers d'achat / vente (par label de date)
     const trades = Portfolio.getHistory().filter(t => t.symbol === currentSymbol);
-    const buyPoints = new Array(labels.length).fill(null);
-    const sellPoints = new Array(labels.length).fill(null);
+    const buyPoints  = [];
+    const sellPoints = [];
 
     trades.forEach(trade => {
-      let closest = -1;
+      // Trouver l'entrée live la plus proche par timestamp réel
+      let closestIdx = -1;
       let minDist = Infinity;
       history.forEach((h, i) => {
         const dist = Math.abs(h.time - trade.time);
-        if (dist < minDist) {
-          minDist = dist;
-          closest = i;
-        }
+        if (dist < minDist) { minDist = dist; closestIdx = i; }
       });
-      // N'afficher que si le trade est proche d'un point live (< 60s d'écart)
-      if (closest >= 0 && minDist < 60000) {
-        if (trade.side === 'buy') buyPoints[closest] = trade.price;
-        else sellPoints[closest] = trade.price;
+      // Afficher uniquement si le trade correspond à un point live récent (< 60 s)
+      if (closestIdx >= 0 && minDist < 60000) {
+        const point = { x: labels[closestIdx], y: trade.price };
+        if (trade.side === 'buy') buyPoints.push(point);
+        else                      sellPoints.push(point);
       }
     });
 
-    chart.data.datasets[1].data = buyPoints;
-    chart.data.datasets[2].data = sellPoints;
+    chart.data.datasets[2].data = buyPoints;
+    chart.data.datasets[3].data = sellPoints;
 
     chart.update('none');
   }
