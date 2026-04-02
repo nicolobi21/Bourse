@@ -48,9 +48,41 @@ const Market = (() => {
   let intervalId = null;
   let marketOpen = false;
 
+  function save() {
+    const roomCode = localStorage.getItem('bourse_room') || 'solo';
+    try {
+      localStorage.setItem('bourse_market_' + roomCode, JSON.stringify({ prices, priceHistory, trends, trendChangeCounter }));
+    } catch (e) {
+      // localStorage plein (historique trop long) : on ignore
+    }
+  }
+
+  function restore() {
+    const roomCode = localStorage.getItem('bourse_room') || 'solo';
+    const raw = localStorage.getItem('bourse_market_' + roomCode);
+    if (!raw) return false;
+    try {
+      const data = JSON.parse(raw);
+      if (!data.prices || Object.keys(data.prices).length !== STOCKS.length) return false;
+      // Réattacher les propriétés statiques (description, fundamentals, etc.)
+      STOCKS.forEach(stock => {
+        if (data.prices[stock.symbol]) {
+          data.prices[stock.symbol] = { ...stock, ...data.prices[stock.symbol] };
+        }
+      });
+      prices = data.prices;
+      priceHistory = data.priceHistory || {};
+      trends = data.trends || {};
+      trendChangeCounter = data.trendChangeCounter || 0;
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
   function init() {
-    // Idempotent: ne pas réinitialiser si déjà initialisé (évite reset des prix au rechargement)
-    if (Object.keys(prices).length > 0) return;
+    // Tenter de restaurer depuis localStorage (rechargement de page)
+    if (restore()) return;
 
     STOCKS.forEach(stock => {
       prices[stock.symbol] = {
@@ -81,6 +113,7 @@ const Market = (() => {
       clearInterval(intervalId);
       intervalId = null;
     }
+    save();
   }
 
   // Tendances cachées par action — changent au cours du jeu
@@ -172,6 +205,7 @@ const Market = (() => {
       if (priceHistory[stock.symbol].length > 500) priceHistory[stock.symbol].shift();
     });
 
+    save(); // Persister les prix pour résister au rechargement de page
     notifyListeners();
   }
 
@@ -236,6 +270,15 @@ const Market = (() => {
     listeners = [];
   }
 
+  function clearSave() {
+    const roomCode = localStorage.getItem('bourse_room') || 'solo';
+    localStorage.removeItem('bourse_market_' + roomCode);
+    prices = {};
+    priceHistory = {};
+    trends = {};
+    trendChangeCounter = 0;
+  }
+
   function notifyListeners() {
     listeners.forEach(fn => fn(prices));
   }
@@ -248,5 +291,5 @@ const Market = (() => {
     return Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
   }
 
-  return { init, start, stop, getPrice, getAllPrices, getHistory, getStocks, isOpen, applyShock, onUpdate, clearListeners };
+  return { init, start, stop, getPrice, getAllPrices, getHistory, getStocks, isOpen, applyShock, onUpdate, clearListeners, clearSave };
 })();
