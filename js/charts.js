@@ -1,12 +1,20 @@
 /**
  * charts.js — Graphiques de cours en temps réel via Chart.js
+ * Axe X en jours de trading virtuels (DD Mon en français)
  */
 
 const Charts = (() => {
+  const MONTHS_FR = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
+
   let chart = null;
   let currentSymbol = null;
-  let tradeMarkers = []; // Points d'achat/vente du joueur
-  let timeframeSeconds = 0; // 0 = all, 60 = 1min, 300 = 5min, 900 = 15min
+  let tradeMarkers = [];
+  let timeframeDays = 90; // 0 = tout, 7 = 1 sem, 30 = 1 mois, 90 = 3 mois
+
+  function formatDateLabel(ts) {
+    const d = new Date(ts);
+    return d.getUTCDate() + ' ' + MONTHS_FR[d.getUTCMonth()];
+  }
 
   function init(canvasId, symbol) {
     currentSymbol = symbol;
@@ -98,8 +106,8 @@ const Charts = (() => {
     });
   }
 
-  function setTimeframe(seconds) {
-    timeframeSeconds = seconds;
+  function setTimeframe(days) {
+    timeframeDays = days;
     update();
   }
 
@@ -108,24 +116,19 @@ const Charts = (() => {
 
     let history = Market.getHistory(currentSymbol);
 
-    // Filter by timeframe
-    if (timeframeSeconds > 0 && history.length > 0) {
-      const cutoff = Date.now() - timeframeSeconds * 1000;
-      history = history.filter(h => h.time >= cutoff);
+    // Filtrer par nombre de jours (slice depuis la fin)
+    if (timeframeDays > 0 && history.length > timeframeDays) {
+      history = history.slice(-timeframeDays);
     }
 
-    const labels = history.map(h => {
-      const d = new Date(h.time);
-      return d.getHours().toString().padStart(2, '0') + ':' +
-             d.getMinutes().toString().padStart(2, '0') + ':' +
-             d.getSeconds().toString().padStart(2, '0');
-    });
+    // Utiliser gameDate pour l'affichage, time pour le matching des trades
+    const labels = history.map(h => formatDateLabel(h.gameDate || h.time));
     const data = history.map(h => h.price);
 
     chart.data.labels = labels;
     chart.data.datasets[0].data = data;
 
-    // Mettre à jour couleur selon tendance
+    // Couleur selon tendance
     if (data.length >= 2) {
       const isUp = data[data.length - 1] >= data[0];
       chart.data.datasets[0].borderColor = isUp ? '#10b981' : '#ef4444';
@@ -134,14 +137,13 @@ const Charts = (() => {
         : 'rgba(239, 68, 68, 0.05)';
     }
 
-    // Trade markers
+    // Trade markers : match par timestamp réel (uniquement sur la partie live)
     const trades = Portfolio.getHistory().filter(t => t.symbol === currentSymbol);
     const buyPoints = new Array(labels.length).fill(null);
     const sellPoints = new Array(labels.length).fill(null);
 
     trades.forEach(trade => {
-      // Trouver le point le plus proche dans l'historique
-      let closest = 0;
+      let closest = -1;
       let minDist = Infinity;
       history.forEach((h, i) => {
         const dist = Math.abs(h.time - trade.time);
@@ -150,10 +152,10 @@ const Charts = (() => {
           closest = i;
         }
       });
-      if (trade.side === 'buy') {
-        buyPoints[closest] = trade.price;
-      } else {
-        sellPoints[closest] = trade.price;
+      // N'afficher que si le trade est proche d'un point live (< 60s d'écart)
+      if (closest >= 0 && minDist < 60000) {
+        if (trade.side === 'buy') buyPoints[closest] = trade.price;
+        else sellPoints[closest] = trade.price;
       }
     });
 

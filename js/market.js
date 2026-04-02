@@ -1,9 +1,13 @@
 /**
  * market.js — Moteur de simulation des prix
- * Random walk avec drift, volatilité par action, spread bid/ask
+ * 10 secondes de jeu = 1 jour de trading virtuel
+ * Historique pré-jeu : 252 jours ouvrables générés de façon déterministe
  */
 
 const Market = (() => {
+  // Ancre fixe : le jeu démarre virtuellement le 2024-01-02
+  const GAME_VIRTUAL_START = new Date('2024-01-02T00:00:00Z').getTime();
+
   const STOCKS = [
     {
       symbol: 'ABI', name: 'AB InBev', sector: 'Alimentation & Boissons', basePrice: 52, volatility: 0.008,
@@ -42,18 +46,113 @@ const Market = (() => {
     },
   ];
 
+  // Paramètres historiques réalistes par action
+  const STOCK_PARAMS = {
+    ABI:  { annualDrift: -0.02, annualVol: 0.20 },
+    UCB:  { annualDrift:  0.18, annualVol: 0.28 },
+    PROX: { annualDrift: -0.08, annualVol: 0.22 },
+    SOLV: { annualDrift:  0.05, annualVol: 0.25 },
+    COLR: { annualDrift:  0.04, annualVol: 0.18 },
+    AGS:  { annualDrift:  0.10, annualVol: 0.22 },
+    BEKB: { annualDrift:  0.02, annualVol: 0.28 },
+  };
+
   let prices = {};
-  let priceHistory = {};
+  let priceHistory = {};       // historique live (temps réel + date virtuelle)
+  let preGameHistory = {};     // 252 jours ouvrables pré-jeu (déterministe)
+  let currentGameDate = GAME_VIRTUAL_START;
   let listeners = [];
   let intervalId = null;
   let marketOpen = false;
+  let trends = {};
+  let trendChangeCounter = 0;
+
+  // === Générateur aléatoire déterministe (LCG) ===
+  function lcgRandom(seed) {
+    let s = seed >>> 0;
+    return function () {
+      s = (Math.imul(1664525, s) + 1013904223) >>> 0;
+      return s / 4294967296;
+    };
+  }
+
+  function nextBusinessDay(ts) {
+    const d = new Date(ts);
+    d.setUTCDate(d.getUTCDate() + 1);
+    while (d.getUTCDay() === 0 || d.getUTCDay() === 6) {
+      d.setUTCDate(d.getUTCDate() + 1);
+    }
+    return d.getTime();
+  }
+
+  function prevBusinessDay(ts) {
+    const d = new Date(ts);
+    d.setUTCDate(d.getUTCDate() - 1);
+    while (d.getUTCDay() === 0 || d.getUTCDay() === 6) {
+      d.setUTCDate(d.getUTCDate() - 1);
+    }
+    return d.getTime();
+  }
+
+  /**
+   * Génère 252 jours ouvrables d'historique se terminant exactement à basePrice.
+   * Déterministe : même graine → même historique à chaque session.
+   */
+  function generatePreGameHistory(stock) {
+    const params = STOCK_PARAMS[stock.symbol] || { annualDrift: 0.03, annualVol: 0.22 };
+    const N = 252;
+    const dailyDrift = params.annualDrift / N;
+    const dailyVol = params.annualVol / Math.sqrt(N);
+
+    // Graine basée sur le symbole (déterministe)
+    const seed = stock.symbol.split('').reduce(
+      (acc, ch) => (Math.imul(acc, 31) + ch.charCodeAt(0)) >>> 0, 1234567
+    );
+    const rng = lcgRandom(seed);
+
+    // Générer N log-rendements (GBM)
+    const logReturns = [];
+    for (let i = 0; i < N; i++) {
+      let u, v;
+      do { u = rng(); } while (u === 0);
+      do { v = rng(); } while (v === 0);
+      const z = Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+      logReturns.push((dailyDrift - 0.5 * dailyVol * dailyVol) + dailyVol * z);
+    }
+
+    // Prix de départ calculé pour que la fin soit exactement basePrice
+    const totalLogReturn = logReturns.reduce((a, b) => a + b, 0);
+    const startPrice = stock.basePrice * Math.exp(-totalLogReturn);
+
+    // Dates : N jours ouvrables avant GAME_VIRTUAL_START
+    const dates = [];
+    let ts = GAME_VIRTUAL_START;
+    for (let i = 0; i < N; i++) {
+      ts = prevBusinessDay(ts);
+      dates.unshift(ts);
+    }
+
+    // Construire la série de prix
+    const history = [];
+    let cumLogReturn = 0;
+    for (let i = 0; i < N; i++) {
+      const price = +(startPrice * Math.exp(cumLogReturn)).toFixed(2);
+      history.push({ time: dates[i], price: Math.max(0.01, price), gameDate: dates[i] });
+      cumLogReturn += logReturns[i];
+    }
+
+    return history;
+  }
 
   function save() {
     const roomCode = localStorage.getItem('bourse_room') || 'solo';
     try {
-      localStorage.setItem('bourse_market_' + roomCode, JSON.stringify({ prices, priceHistory, trends, trendChangeCounter }));
+      // preGameHistory est déterministe, inutile de le sauvegarder
+      localStorage.setItem('bourse_market_' + roomCode, JSON.stringify({
+        prices, priceHistory, currentGameDate, trends, trendChangeCounter
+      }));
     } catch (e) {
-      // localStorage plein (historique trop long) : on ignore
+      // localStorage plein : on ignore
     }
   }
 
@@ -64,16 +163,24 @@ const Market = (() => {
     try {
       const data = JSON.parse(raw);
       if (!data.prices || Object.keys(data.prices).length !== STOCKS.length) return false;
-      // Réattacher les propriétés statiques (description, fundamentals, etc.)
+
       STOCKS.forEach(stock => {
         if (data.prices[stock.symbol]) {
           data.prices[stock.symbol] = { ...stock, ...data.prices[stock.symbol] };
         }
       });
+
       prices = data.prices;
       priceHistory = data.priceHistory || {};
+      currentGameDate = data.currentGameDate || GAME_VIRTUAL_START;
       trends = data.trends || {};
       trendChangeCounter = data.trendChangeCounter || 0;
+
+      // Régénérer l'historique pré-jeu (déterministe, pas besoin de le persister)
+      STOCKS.forEach(stock => {
+        preGameHistory[stock.symbol] = generatePreGameHistory(stock);
+      });
+
       return true;
     } catch (e) {
       return false;
@@ -81,8 +188,9 @@ const Market = (() => {
   }
 
   function init() {
-    // Tenter de restaurer depuis localStorage (rechargement de page)
     if (restore()) return;
+
+    currentGameDate = GAME_VIRTUAL_START;
 
     STOCKS.forEach(stock => {
       prices[stock.symbol] = {
@@ -96,15 +204,21 @@ const Market = (() => {
         bid: stock.basePrice * (1 - 0.001),
         ask: stock.basePrice * (1 + 0.001),
       };
-      priceHistory[stock.symbol] = [{ time: Date.now(), price: stock.basePrice }];
+      priceHistory[stock.symbol] = [{
+        time: Date.now(),
+        price: stock.basePrice,
+        gameDate: currentGameDate,
+      }];
+      preGameHistory[stock.symbol] = generatePreGameHistory(stock);
     });
+
     initTrends();
   }
 
   function start() {
     if (intervalId) return;
     marketOpen = true;
-    intervalId = setInterval(tick, 10000); // Mise à jour toutes les 10 secondes
+    intervalId = setInterval(tick, 10000);
   }
 
   function stop() {
@@ -116,25 +230,17 @@ const Market = (() => {
     save();
   }
 
-  // Tendances cachées par action — changent au cours du jeu
-  let trends = {};
-  let trendChangeCounter = 0;
-
   function initTrends() {
     STOCKS.forEach(stock => {
-      // Chaque action a une tendance de fond : haussière, baissière ou neutre
-      // Pondérée par les fondamentaux (P/E bas = plus de chances de monter)
       const pe = parseFloat(stock.fundamentals.pe);
       const divYield = parseFloat(stock.fundamentals.dividend);
-      // Score fondamental : PE bas + dividende haut = favorable
-      // Borné entre -0.001 et +0.001 pour éviter les explosions de prix
       const rawScore = (20 - pe) / 10000 + divYield / 20000;
       const fundScore = Math.max(-0.001, Math.min(0.001, rawScore));
 
       trends[stock.symbol] = {
-        direction: fundScore + (Math.random() - 0.5) * 0.0003, // drift très léger
-        momentum: 0,       // momentum accumulé (mean-reversion)
-        sentiment: 0,       // sentiment de marché (-1 à +1)
+        direction: fundScore + (Math.random() - 0.5) * 0.0003,
+        momentum: 0,
+        sentiment: 0,
       };
     });
   }
@@ -142,16 +248,16 @@ const Market = (() => {
   function tick() {
     if (!marketOpen) return;
 
-    // Toutes les ~5 minutes (30 ticks de 10s), possibilité de changement de tendance
+    // Avancer la date virtuelle d'un jour ouvrable (10 secondes = 1 jour)
+    currentGameDate = nextBusinessDay(currentGameDate);
+
     trendChangeCounter++;
     if (trendChangeCounter >= 30) {
       trendChangeCounter = 0;
       STOCKS.forEach(stock => {
         const t = trends[stock.symbol];
-        // Le sentiment évolue graduellement (pas de saut brutal)
         t.sentiment += (Math.random() - 0.5) * 0.4;
         t.sentiment = Math.max(-1, Math.min(1, t.sentiment));
-        // La direction ajuste légèrement, bornée pour éviter les explosions
         t.direction += (Math.random() - 0.5) * 0.0002;
         t.direction = Math.max(-0.002, Math.min(0.002, t.direction));
       });
@@ -161,51 +267,43 @@ const Market = (() => {
       const p = prices[stock.symbol];
       const t = trends[stock.symbol];
 
-      // 1. Tendance de fond (fondamentaux) — très léger
       const trendComponent = t.direction * 0.1;
 
-      // 2. Momentum : si l'action monte depuis un moment, elle a tendance à continuer
-      //    mais avec mean-reversion (retour vers le prix d'ouverture)
       const deviation = (p.current - p.open) / p.open;
-      const meanReversion = -deviation * 0.05; // force de rappel renforcée
-      t.momentum = t.momentum * 0.8 + (p.changePct / 100) * 0.2; // momentum lissé
-      t.momentum = Math.max(-0.01, Math.min(0.01, t.momentum)); // borner le momentum
+      const meanReversion = -deviation * 0.05;
+      t.momentum = t.momentum * 0.8 + (p.changePct / 100) * 0.2;
+      t.momentum = Math.max(-0.01, Math.min(0.01, t.momentum));
       const momentumComponent = t.momentum * 0.05;
 
-      // 3. Sentiment de marché
       const sentimentComponent = t.sentiment * stock.volatility * 0.2;
-
-      // 4. Bruit aléatoire (toujours présent mais réduit)
       const noise = gaussianRandom() * stock.volatility * 0.5;
 
-      // Combinaison — bornée à ±3% max par tick
       let returnRate = trendComponent + momentumComponent + sentimentComponent + meanReversion + noise;
       returnRate = Math.max(-0.03, Math.min(0.03, returnRate));
 
       p.current = +(p.current * (1 + returnRate)).toFixed(2);
-      // Borner le prix entre 50% et 200% du prix d'ouverture
       p.current = Math.max(p.open * 0.5, Math.min(p.open * 2, p.current));
 
-      // Mise à jour high/low
       p.high = Math.max(p.high, p.current);
       p.low = Math.min(p.low, p.current);
 
-      // Calcul change
       p.change = +(p.current - p.open).toFixed(2);
       p.changePct = +((p.change / p.open) * 100).toFixed(2);
 
-      // Spread bid/ask (0.1% à 0.5%)
       const spreadPct = 0.001 + Math.random() * 0.004;
       const halfSpread = p.current * spreadPct / 2;
       p.bid = +(p.current - halfSpread).toFixed(2);
       p.ask = +(p.current + halfSpread).toFixed(2);
 
-      // Historique (cap à 500 points par action)
-      priceHistory[stock.symbol].push({ time: Date.now(), price: p.current });
+      priceHistory[stock.symbol].push({
+        time: Date.now(),
+        price: p.current,
+        gameDate: currentGameDate,
+      });
       if (priceHistory[stock.symbol].length > 500) priceHistory[stock.symbol].shift();
     });
 
-    save(); // Persister les prix pour résister au rechargement de page
+    save();
     notifyListeners();
   }
 
@@ -238,7 +336,11 @@ const Market = (() => {
     const halfSpread = p.current * spreadPct / 2;
     p.bid = +(p.current - halfSpread).toFixed(2);
     p.ask = +(p.current + halfSpread).toFixed(2);
-    priceHistory[symbol].push({ time: Date.now(), price: p.current });
+    priceHistory[symbol].push({
+      time: Date.now(),
+      price: p.current,
+      gameDate: currentGameDate,
+    });
     if (priceHistory[symbol].length > 500) priceHistory[symbol].shift();
   }
 
@@ -250,8 +352,14 @@ const Market = (() => {
     return { ...prices };
   }
 
+  /**
+   * Retourne l'historique complet : 252 jours pré-jeu + historique live.
+   * Chaque entrée a { time, price, gameDate }.
+   */
   function getHistory(symbol) {
-    return priceHistory[symbol] || [];
+    const pre = preGameHistory[symbol] || [];
+    const live = priceHistory[symbol] || [];
+    return [...pre, ...live];
   }
 
   function getStocks() {
@@ -260,6 +368,10 @@ const Market = (() => {
 
   function isOpen() {
     return marketOpen;
+  }
+
+  function getCurrentGameDate() {
+    return currentGameDate;
   }
 
   function onUpdate(fn) {
@@ -275,6 +387,8 @@ const Market = (() => {
     localStorage.removeItem('bourse_market_' + roomCode);
     prices = {};
     priceHistory = {};
+    preGameHistory = {};
+    currentGameDate = GAME_VIRTUAL_START;
     trends = {};
     trendChangeCounter = 0;
   }
@@ -284,12 +398,18 @@ const Market = (() => {
   }
 
   function gaussianRandom() {
-    // Box-Muller transform
     let u = 0, v = 0;
     while (u === 0) u = Math.random();
     while (v === 0) v = Math.random();
     return Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
   }
 
-  return { init, start, stop, getPrice, getAllPrices, getHistory, getStocks, isOpen, applyShock, onUpdate, clearListeners, clearSave };
+  return {
+    init, start, stop,
+    getPrice, getAllPrices, getHistory,
+    getStocks, isOpen,
+    applyShock,
+    onUpdate, clearListeners, clearSave,
+    getCurrentGameDate,
+  };
 })();
