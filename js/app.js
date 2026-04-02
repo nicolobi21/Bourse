@@ -875,30 +875,67 @@ const App = (() => {
     }
 
     container.innerHTML = schedule.map(e => {
-      let statusClass = '';
-      let statusText = '';
-      let icon = '📅';
+      // Libellé de la cible
+      let targetLabel = '';
+      let targetClass = 'cal-target-stock';
+      if (e.target === 'ALL') {
+        targetLabel = '🌍 Tous les marchés';
+        targetClass = 'cal-target-all';
+      } else if (e.target.startsWith('SECTOR:')) {
+        targetLabel = '🏭 Secteur ' + e.target.replace('SECTOR:', '');
+        targetClass = 'cal-target-sector';
+      } else {
+        const stock = Market.getStocks().find(s => s.symbol === e.target);
+        targetLabel = stock ? `📈 ${stock.name} (${stock.symbol})` : e.target;
+      }
 
+      // Statut
+      let statusClass, icon, statusText;
       if (e.triggered) {
         statusClass = 'cal-past';
         statusText = 'Publié';
         icon = '✅';
       } else if (e.isSoon) {
         statusClass = 'cal-soon';
-        statusText = `Dans ${e.remainingMin} min`;
-        icon = '⏰';
+        statusText = `⏱ Dans ${e.remainingMin} min`;
+        icon = '⚡';
       } else {
         statusClass = 'cal-future';
         statusText = `Dans ${e.remainingMin} min`;
         icon = '📅';
       }
 
+      // Scénarios d'impact
+      let scenariosHtml = '';
+      if (e.triggered) {
+        scenariosHtml = `<div class="cal-published-note">→ Résultat dans l'onglet Actus</div>`;
+      } else {
+        const parts = [];
+        if (e.posRange) {
+          const lo = (e.posRange.min * 100).toFixed(0);
+          const hi = (e.posRange.max * 100).toFixed(0);
+          parts.push(`<div class="cal-scenario cal-pos">📈 Scénario haussier&nbsp;&nbsp;<strong>+${lo}% à +${hi}%</strong></div>`);
+        }
+        if (e.negRange) {
+          const lo = Math.abs(e.negRange.max * 100).toFixed(0);
+          const hi = Math.abs(e.negRange.min * 100).toFixed(0);
+          parts.push(`<div class="cal-scenario cal-neg">📉 Scénario baissier&nbsp;&nbsp;<strong>-${lo}% à -${hi}%</strong></div>`);
+        }
+        scenariosHtml = parts.length
+          ? `<div class="cal-scenarios">${parts.join('')}</div>`
+          : '';
+      }
+
       return `<div class="cal-item ${statusClass}">
-        <span class="cal-icon">${icon}</span>
-        <div class="cal-info">
-          <div class="cal-label">${e.label}</div>
-          <div class="cal-time">${statusText}</div>
+        <div class="cal-header">
+          <span class="cal-icon">${icon}</span>
+          <div class="cal-info">
+            <div class="cal-label">${escapeHtml(e.label)}</div>
+            <div class="cal-target ${targetClass}">${targetLabel}</div>
+          </div>
+          <span class="cal-time">${statusText}</span>
         </div>
+        ${scenariosHtml}
       </div>`;
     }).join('');
   }

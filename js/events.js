@@ -155,20 +155,34 @@ const Events = (() => {
     if (!gameStartTime) return [];
 
     return scheduledEvents.map(e => {
-      const triggerTime = gameStartTime + e.scaledMinute * 60000;
       const elapsed = Date.now() - gameStartTime;
       const elapsedMin = elapsed / 60000;
       const remaining = Math.max(0, e.scaledMinute - elapsedMin);
 
+      // Calcul des plages d'impact positif / négatif pour l'affichage agenda
+      const posOutcomes = (e.possibleOutcomes || []).filter(o => o.type === 'positive');
+      const negOutcomes = (e.possibleOutcomes || []).filter(o => o.type === 'negative');
+      const posRange = posOutcomes.length ? {
+        min: Math.min(...posOutcomes.map(o => o.min)),
+        max: Math.max(...posOutcomes.map(o => o.max)),
+      } : null;
+      const negRange = negOutcomes.length ? {
+        min: Math.min(...negOutcomes.map(o => o.min)),
+        max: Math.max(...negOutcomes.map(o => o.max)),
+      } : null;
+
       return {
-        label: e.label,
-        target: e.target,
-        minuteOffset: e.scaledMinute,
-        triggerTime,
-        triggered: triggeredCalendarEvents.has(e.minuteOffset),
-        remainingMin: Math.round(remaining),
-        isPast: elapsedMin >= e.scaledMinute,
-        isSoon: remaining > 0 && remaining <= 3, // within 3 minutes
+        label:            e.label,
+        target:           e.target,
+        possibleOutcomes: e.possibleOutcomes || [],
+        posRange,
+        negRange,
+        minuteOffset:     e.scaledMinute,
+        triggerTime:      gameStartTime + e.scaledMinute * 60000,
+        triggered:        triggeredCalendarEvents.has(e.minuteOffset),
+        remainingMin:     Math.round(remaining),
+        isPast:           elapsedMin >= e.scaledMinute,
+        isSoon:           remaining > 0 && remaining <= 3,
       };
     });
   }
