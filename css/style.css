@@ -599,7 +599,13 @@ body {
   padding: 0.75rem 1rem;
   flex: 1;
   overflow-y: auto;
-  max-height: 200px;
+  max-height: 260px;
+}
+
+.portfolio-pnl-bar {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  padding: 0.2rem 0;
 }
 
 .leaderboard-live-table {
