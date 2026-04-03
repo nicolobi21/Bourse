@@ -318,7 +318,7 @@ const Market = (() => {
         const t   = trends[stock.symbol];
         const rng = lcgRandom((D * 13 + i * 1000003 + 1) >>> 0);
         const u1  = Math.max(1e-10, rng()); const u2 = rng();
-        const noise = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2) * stock.volatility * 0.5;
+        const noise = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2) * stock.volatility * 2.0;
 
         const deviation = (p.current - p.open) / p.open;
         t.momentum = t.momentum * 0.8 + (p.changePct / 100) * 0.2;
@@ -326,7 +326,7 @@ const Market = (() => {
 
         let returnRate = t.direction * 0.1 + t.momentum * 0.05
           + t.sentiment * stock.volatility * 0.2 - deviation * 0.05 + noise;
-        returnRate = Math.max(-0.03, Math.min(0.03, returnRate));
+        returnRate = Math.max(-0.06, Math.min(0.06, returnRate));
 
         p.current = +(p.current * (1 + returnRate)).toFixed(2);
         p.current = Math.max(p.open * 0.5, Math.min(p.open * 2, p.current));
@@ -422,7 +422,7 @@ const Market = (() => {
       // Bruit gaussien principal via Box-Muller
       const u1 = Math.max(1e-10, rng());
       const u2 = rng();
-      const noise = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2) * stock.volatility * 0.5;
+      const noise = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2) * stock.volatility * 2.0;
 
       const trendComponent     = t.direction * 0.1;
       const deviation          = (p.current - p.open) / p.open;
@@ -433,7 +433,7 @@ const Market = (() => {
       const sentimentComponent = t.sentiment * stock.volatility * 0.2;
 
       let returnRate = trendComponent + momentumComponent + sentimentComponent + meanReversion + noise;
-      returnRate = Math.max(-0.03, Math.min(0.03, returnRate));
+      returnRate = Math.max(-0.06, Math.min(0.06, returnRate));
 
       p.current = +(p.current * (1 + returnRate)).toFixed(2);
       p.current = Math.max(p.open * 0.5, Math.min(p.open * 2, p.current));
@@ -451,7 +451,7 @@ const Market = (() => {
       // Mèches intraday — Box-Muller appels 4 & 5
       const wu1  = Math.max(1e-10, rng());
       const wu2  = rng();
-      const wick = Math.abs(Math.sqrt(-2 * Math.log(wu1)) * Math.cos(2 * Math.PI * wu2)) * stock.volatility * 0.4;
+      const wick = Math.abs(Math.sqrt(-2 * Math.log(wu1)) * Math.cos(2 * Math.PI * wu2)) * stock.volatility * 1.5;
       const tickHigh = +(Math.max(tickOpen, p.current) * (1 + wick)).toFixed(2);
       const tickLow  = +(Math.min(tickOpen, p.current) * Math.max(0.001, 1 - wick)).toFixed(2);
 

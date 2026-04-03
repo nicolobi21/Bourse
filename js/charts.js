@@ -9,7 +9,7 @@ const Charts = (() => {
 
   let chart = null;
   let currentSymbol = null;
-  let timeframeDays = 90; // 0 = tout, 7 = 1 sem, 30 = 1 mois, 90 = 3 mois
+  let timeframeDays = 30; // 0 = tout, 7 = 1 sem, 30 = 1 mois, 90 = 3 mois
 
   function formatDateLabel(ts) {
     const d = new Date(ts);
