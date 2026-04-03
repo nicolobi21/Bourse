@@ -218,6 +218,20 @@ const Sync = (() => {
     }
   }
 
+  // Synchronisation de l'heure de départ (pour que tous les joueurs voient les mêmes cours)
+  function saveGameStart(ts) {
+    if (firebaseAvailable && roomRef) {
+      roomRef.child('gameStartTime').set(ts);
+    }
+  }
+
+  function loadGameStart(callback) {
+    if (!firebaseAvailable || !roomRef) { callback(null); return; }
+    roomRef.child('gameStartTime').once('value', snap => {
+      callback(snap.val() || null);
+    });
+  }
+
   function getRoomCode() { return roomCode; }
   function getPlayerName() { return playerName; }
   function isFirebaseAvailable() { return firebaseAvailable; }
@@ -278,5 +292,7 @@ const Sync = (() => {
     getIsHost,
     restoreSession,
     clearSession,
+    saveGameStart,
+    loadGameStart,
   };
 })();

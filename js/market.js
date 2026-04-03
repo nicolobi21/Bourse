@@ -279,13 +279,17 @@ const Market = (() => {
 
   function initTrends() {
     STOCKS.forEach(stock => {
+      // Graine déterministe basée sur le symbole → identique pour tous les clients
+      const seed = stock.symbol.split('').reduce(
+        (acc, ch) => (Math.imul(acc, 31) + ch.charCodeAt(0)) >>> 0, 9876543
+      );
+      const rng = lcgRandom(seed);
       const pe = parseFloat(stock.fundamentals.pe);
       const divYield = parseFloat(stock.fundamentals.dividend);
       const rawScore = (20 - pe) / 10000 + divYield / 20000;
       const fundScore = Math.max(-0.001, Math.min(0.001, rawScore));
-
       trends[stock.symbol] = {
-        direction: fundScore + (Math.random() - 0.5) * 0.0003,
+        direction: fundScore + (rng() - 0.5) * 0.0003,
         momentum: 0,
         sentiment: 0,
       };
@@ -311,53 +315,63 @@ const Market = (() => {
       payDividends();
     }
 
+    // Seed déterministe basé sur la date virtuelle — identique pour tous les clients
+    const D = (currentGameDate / 1000) | 0;
+
     trendChangeCounter++;
     if (trendChangeCounter >= 30) {
       trendChangeCounter = 0;
-      STOCKS.forEach(stock => {
+      STOCKS.forEach((stock, i) => {
+        const rng = lcgRandom((D * 31 + i * 999983 + 7654321) >>> 0);
         const t = trends[stock.symbol];
-        t.sentiment += (Math.random() - 0.5) * 0.4;
+        t.sentiment += (rng() - 0.5) * 0.4;
         t.sentiment = Math.max(-1, Math.min(1, t.sentiment));
-        t.direction += (Math.random() - 0.5) * 0.0002;
+        t.direction += (rng() - 0.5) * 0.0002;
         t.direction = Math.max(-0.002, Math.min(0.002, t.direction));
       });
     }
 
-    STOCKS.forEach(stock => {
+    STOCKS.forEach((stock, i) => {
       const p = prices[stock.symbol];
       const t = trends[stock.symbol];
-      const tickOpen = p.current; // ouverture du jour = clôture précédente
+      const tickOpen = p.current;
 
-      const trendComponent = t.direction * 0.1;
+      // Générateur séquentiel unique par (jour, action) — 5 appels
+      const rng = lcgRandom((D * 13 + i * 1000003 + 1) >>> 0);
 
-      const deviation = (p.current - p.open) / p.open;
-      const meanReversion = -deviation * 0.05;
+      // Bruit gaussien principal via Box-Muller
+      const u1 = Math.max(1e-10, rng());
+      const u2 = rng();
+      const noise = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2) * stock.volatility * 0.5;
+
+      const trendComponent     = t.direction * 0.1;
+      const deviation          = (p.current - p.open) / p.open;
+      const meanReversion      = -deviation * 0.05;
       t.momentum = t.momentum * 0.8 + (p.changePct / 100) * 0.2;
       t.momentum = Math.max(-0.01, Math.min(0.01, t.momentum));
-      const momentumComponent = t.momentum * 0.05;
-
+      const momentumComponent  = t.momentum * 0.05;
       const sentimentComponent = t.sentiment * stock.volatility * 0.2;
-      const noise = gaussianRandom() * stock.volatility * 0.5;
 
       let returnRate = trendComponent + momentumComponent + sentimentComponent + meanReversion + noise;
       returnRate = Math.max(-0.03, Math.min(0.03, returnRate));
 
       p.current = +(p.current * (1 + returnRate)).toFixed(2);
       p.current = Math.max(p.open * 0.5, Math.min(p.open * 2, p.current));
-
       p.high = Math.max(p.high, p.current);
-      p.low = Math.min(p.low, p.current);
-
-      p.change = +(p.current - p.open).toFixed(2);
+      p.low  = Math.min(p.low, p.current);
+      p.change    = +(p.current - p.open).toFixed(2);
       p.changePct = +((p.change / p.open) * 100).toFixed(2);
 
-      const spreadPct = 0.001 + Math.random() * 0.004;
+      // Spread déterministe (3e appel rng)
+      const spreadPct  = 0.001 + rng() * 0.004;
       const halfSpread = p.current * spreadPct / 2;
       p.bid = +(p.current - halfSpread).toFixed(2);
       p.ask = +(p.current + halfSpread).toFixed(2);
 
-      // Mèches intraday simulées autour de la variation open→close
-      const wick = Math.abs(gaussianRandom()) * stock.volatility * 0.4;
+      // Mèches intraday — Box-Muller appels 4 & 5
+      const wu1  = Math.max(1e-10, rng());
+      const wu2  = rng();
+      const wick = Math.abs(Math.sqrt(-2 * Math.log(wu1)) * Math.cos(2 * Math.PI * wu2)) * stock.volatility * 0.4;
       const tickHigh = +(Math.max(tickOpen, p.current) * (1 + wick)).toFixed(2);
       const tickLow  = +(Math.min(tickOpen, p.current) * Math.max(0.001, 1 - wick)).toFixed(2);
 

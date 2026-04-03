@@ -64,13 +64,26 @@ const App = (() => {
     // Démarrer le marché
     Market.start();
 
-    // Timer
+    // Timer — synchronisé via Firebase pour que tous les joueurs partagent le même instant T0
     gameStartTime = Date.now();
     const savedStart = localStorage.getItem('bourse_gameStart_' + Sync.getRoomCode());
     if (savedStart) {
       gameStartTime = parseInt(savedStart);
     } else {
       localStorage.setItem('bourse_gameStart_' + Sync.getRoomCode(), gameStartTime.toString());
+      // Hôte : publier l'heure de départ sur Firebase
+      if (Sync.getIsHost()) Sync.saveGameStart(gameStartTime);
+    }
+
+    // Rejoindre une salle : récupérer l'heure de départ de l'hôte (async)
+    if (!Sync.getIsHost()) {
+      Sync.loadGameStart(fbStart => {
+        if (fbStart && Math.abs(fbStart - gameStartTime) > 3000) {
+          gameStartTime = fbStart;
+          localStorage.setItem('bourse_gameStart_' + Sync.getRoomCode(), fbStart.toString());
+          Events.start(gameStartTime, GAME_DURATION); // resynchroniser les événements
+        }
+      });
     }
 
     // Market update listener
