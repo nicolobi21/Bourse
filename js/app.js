@@ -75,13 +75,16 @@ const App = (() => {
       if (Sync.getIsHost()) Sync.saveGameStart(gameStartTime);
     }
 
-    // Rejoindre une salle : récupérer l'heure de départ de l'hôte (async)
+    // Rejoindre une salle : récupérer l'heure de départ de l'hôte et rattraper les ticks manqués
     if (!Sync.getIsHost()) {
       Sync.loadGameStart(fbStart => {
         if (fbStart && Math.abs(fbStart - gameStartTime) > 3000) {
           gameStartTime = fbStart;
           localStorage.setItem('bourse_gameStart_' + Sync.getRoomCode(), fbStart.toString());
+          // Avancer silencieusement le marché jusqu'au jour virtuel courant de l'hôte
+          Market.syncToTime(fbStart);
           Events.start(gameStartTime, GAME_DURATION); // resynchroniser les événements
+          updateUI();
         }
       });
     }

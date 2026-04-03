@@ -268,6 +268,86 @@ const Market = (() => {
     intervalId = setInterval(tick, 10000);
   }
 
+  /**
+   * Rattrapage silencieux : avance les prix jusqu'au jour virtuel correspondant
+   * à l'instant actuel depuis gameStartTime. Utilisé quand un joueur rejoint
+   * une partie en cours — garantit que tout le monde voit les mêmes cours.
+   */
+  function syncToTime(gameStartTime) {
+    if (!gameStartTime) return;
+    const TICK_MS = 10000;
+    const elapsedMs = Date.now() - gameStartTime;
+    const expectedTicks = Math.max(0, Math.floor(elapsedMs / TICK_MS));
+
+    // Compte les ticks déjà écoulés (jours ouvrables depuis GAME_VIRTUAL_START)
+    let currentTick = 0;
+    let d = GAME_VIRTUAL_START;
+    while (d < currentGameDate && currentTick < 600) {
+      d = nextBusinessDay(d);
+      currentTick++;
+    }
+
+    const missed = expectedTicks - currentTick;
+    if (missed <= 0 || missed > 400) return; // rien à faire ou trop grand écart
+
+    // Sauvegarde temporaire des listeners pour avancer sans déclencher l'UI
+    const savedListeners = listeners.splice(0);
+
+    for (let n = 0; n < missed; n++) {
+      currentGameDate = nextBusinessDay(currentGameDate);
+      const D = (currentGameDate / 1000) | 0;
+
+      dividendTickCounter++;
+      if (dividendTickCounter >= 63) { dividendTickCounter = 0; }
+
+      trendChangeCounter++;
+      if (trendChangeCounter >= 30) {
+        trendChangeCounter = 0;
+        STOCKS.forEach((stock, i) => {
+          const rng = lcgRandom((D * 31 + i * 999983 + 7654321) >>> 0);
+          const t = trends[stock.symbol];
+          t.sentiment += (rng() - 0.5) * 0.4;
+          t.sentiment  = Math.max(-1, Math.min(1, t.sentiment));
+          t.direction  += (rng() - 0.5) * 0.0002;
+          t.direction  = Math.max(-0.002, Math.min(0.002, t.direction));
+        });
+      }
+
+      STOCKS.forEach((stock, i) => {
+        const p   = prices[stock.symbol];
+        const t   = trends[stock.symbol];
+        const rng = lcgRandom((D * 13 + i * 1000003 + 1) >>> 0);
+        const u1  = Math.max(1e-10, rng()); const u2 = rng();
+        const noise = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2) * stock.volatility * 0.5;
+
+        const deviation = (p.current - p.open) / p.open;
+        t.momentum = t.momentum * 0.8 + (p.changePct / 100) * 0.2;
+        t.momentum = Math.max(-0.01, Math.min(0.01, t.momentum));
+
+        let returnRate = t.direction * 0.1 + t.momentum * 0.05
+          + t.sentiment * stock.volatility * 0.2 - deviation * 0.05 + noise;
+        returnRate = Math.max(-0.03, Math.min(0.03, returnRate));
+
+        p.current = +(p.current * (1 + returnRate)).toFixed(2);
+        p.current = Math.max(p.open * 0.5, Math.min(p.open * 2, p.current));
+        p.high = Math.max(p.high, p.current);
+        p.low  = Math.min(p.low, p.current);
+        p.change    = +(p.current - p.open).toFixed(2);
+        p.changePct = +((p.change / p.open) * 100).toFixed(2);
+
+        const spreadPct = 0.001 + rng() * 0.004;
+        const half = p.current * spreadPct / 2;
+        p.bid = +(p.current - half).toFixed(2);
+        p.ask = +(p.current + half).toFixed(2);
+      });
+    }
+
+    // Restaure les listeners et pousse une mise à jour UI unique
+    listeners.push(...savedListeners);
+    save();
+    notifyListeners();
+  }
+
   function stop() {
     marketOpen = false;
     if (intervalId) {
@@ -528,6 +608,6 @@ const Market = (() => {
     applyShock,
     onUpdate, onDividend, onWeekend,
     clearListeners, clearSave,
-    getCurrentGameDate,
+    getCurrentGameDate, syncToTime,
   };
 })();
